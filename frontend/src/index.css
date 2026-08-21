@@ -91,6 +91,20 @@ a { color: var(--link); }
 .topo__marca strong { font-size: 15px; letter-spacing: -0.01em; }
 .topo__marca span { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; }
 .conteudo--simples { margin: 0 auto; width: 100%; }
+/* Titulares oferecidos para seleção: ninguém decora um CPF, e digitar errado
+   devolve zero — o mesmo zero que a demo usa como evidência de outra coisa. */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 8px 12px; border-radius: var(--radius-md); cursor: pointer;
+  background: var(--bg-subtle); border: 1px solid var(--border-subtle);
+  color: var(--text-pri); font-family: inherit; font-size: 12.5px;
+}
+.chip:hover { border-color: var(--text-muted); }
+.chip span { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.chip--ativo { border-color: var(--accent); background: rgba(0,237,100,.07); }
+.chip--ativo span { color: var(--text-muted); }
+
 /* A linha do MongoDB na tabela de alternativas é a conclusão, não mais um item. */
 .linha--destaque td { background: rgba(0,237,100,.06); }
 .linha--destaque td:last-child { color: var(--accent); font-weight: 600; }

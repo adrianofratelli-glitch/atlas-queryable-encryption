@@ -8,7 +8,9 @@ import Bloco from './components/Bloco'
  * conseguir ler o dado. Tudo que não serve para provar isso ficou de fora.
  */
 
-const EXEMPLO_CPF = '99943750162'
+const brl = (n) => typeof n === 'number' ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : ''
+
+const formatarCpf = (cpf) => String(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
 
 function ErroToast() {
   const [toast, setToast] = useState(null)
@@ -82,13 +84,27 @@ const ALTERNATIVAS = [
 export default function App() {
   const apiBusca = useApi()
   const apiPar = useApi()
-  const [cpf, setCpf] = useState(EXEMPLO_CPF)
+  const apiExemplos = useApi()
+  const [titulares, setTitulares] = useState([])
+  const [cpf, setCpf] = useState('')
   const [minimo, setMinimo] = useState(8000)
   const [maximo, setMaximo] = useState(15000)
   const [resultado, setResultado] = useState(null)
   const [par, setPar] = useState(null)
 
   const buscar = (params) => apiBusca.call(`/demo/buscar?${new URLSearchParams(params)}`).then(setResultado)
+
+  // Ninguém decora um CPF. Sem esta lista, a demo começa com alguém digitando
+  // um número que não existe e recebendo zero — pelo motivo errado.
+  useEffect(() => {
+    apiExemplos.call('/demo/exemplos').then(dados => {
+      const lista = dados?.titulares || []
+      setTitulares(lista)
+      // Só preenche o que ainda está vazio: uma segunda resposta chegando
+      // depois não pode trocar o titular que já está selecionado na tela.
+      setCpf(atual => atual || lista[0]?.cpf || '')
+    })
+  }, [apiExemplos.call])
 
   return (
     <div className="app app--simples">
@@ -114,7 +130,22 @@ export default function App() {
         </p>
 
         <div className="card">
-          <div className="campos">
+          <p className="legenda" style={{ margin: '0 0 8px' }}>
+            Titulares na base — escolha um, ou digite outro CPF:
+          </p>
+          <div className="chips">
+            {titulares.map(t => (
+              <button key={t.cpf}
+                className={t.cpf === cpf ? 'chip chip--ativo' : 'chip'}
+                onClick={() => setCpf(t.cpf)}>
+                <strong>{t.nome}</strong>
+                <span>{formatarCpf(t.cpf)} · {t.uf} · {brl(t.salario)}</span>
+              </button>
+            ))}
+            {!titulares.length && <span className="legenda">carregando titulares…</span>}
+          </div>
+
+          <div className="campos" style={{ marginTop: 14 }}>
             <div className="campo">
               <label>CPF (campo cifrado)</label>
               <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="99912345678" />

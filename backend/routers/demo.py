@@ -48,6 +48,17 @@ def _cronometrar(fn):
     return fn(), round((time.perf_counter() - inicio) * 1000, 1)
 
 
+def _ids_do_par() -> list:
+    """Os `_id` do par plantado, se o seed já rodou."""
+    if not SEEDS.exists():
+        return []
+    try:
+        seeds = json.loads(SEEDS.read_text())
+        return [ObjectId(bruto) for bruto in seeds.get("cpf_repetido", [])]
+    except Exception:
+        return []
+
+
 def _executar(filtro: dict, limite: int) -> dict:
     """O mesmo filtro nos dois clientes, no mesmo instante.
 
@@ -133,6 +144,55 @@ def buscar(
     }
 
 
+@router.get("/exemplos")
+def exemplos(quantos: int = Query(4, ge=1, le=8)):
+    """Alguns titulares reais da base, para a tela oferecer em vez de exigir
+    que alguém decore um CPF.
+
+    Sai pelo cliente CIFRADO de propósito: é a aplicação lendo o próprio dado,
+    exatamente como faria em produção. Digitar um CPF errado no palco devolve
+    zero pelo motivo errado — e "zero" é justamente a evidência que a demo usa
+    para outra coisa.
+    """
+    # O par plantado fica de fora: o CPF dele aparece em dois titulares, e uma
+    # busca por igualdade voltando com dois documentos antes de a tela explicar
+    # o par parece defeito. Ele tem a sua própria seção.
+    filtro = {"_id": {"$nin": _ids_do_par()}} if _ids_do_par() else {}
+
+    # Uma folga acima do pedido cobre qualquer duplicata que sobre.
+    try:
+        docs = list(
+            _colecao(cliente_cifrado())
+            .find(filtro, {"_id": 1, "nome": 1, "cpf": 1, "salario": 1, "uf": 1})
+            # `find` sem `sort` não promete ordem nenhuma: duas chamadas podem
+            # devolver conjuntos diferentes, e a demo deixa de ser reprodutível.
+            .sort("_id", 1)
+            .limit(quantos + 3)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
+
+    # O par plantado compartilha o CPF. Oferecer os dois como se fossem opções
+    # distintas confunde: a mesma busca traria dois titulares, e a tela ainda
+    # não explicou por quê.
+    vistos: set[str] = set()
+    unicos = []
+    for doc in docs:
+        cpf = doc.get("cpf")
+        if not isinstance(cpf, str) or cpf in vistos:
+            continue
+        vistos.add(cpf)
+        unicos.append({
+            "cpf": cpf,
+            "nome": doc.get("nome"),
+            "salario": doc.get("salario"),
+            "uf": doc.get("uf"),
+        })
+        if len(unicos) == quantos:
+            break
+    return {"titulares": unicos}
+
+
 @router.get("/par-repetido")
 def par_repetido():
     """Dois titulares com o MESMO CPF e ciphertexts diferentes.
@@ -145,8 +205,7 @@ def par_repetido():
     """
     if not SEEDS.exists():
         raise HTTPException(status_code=503, detail="Rode seed_data.py — demo_seeds.json ausente.")
-    seeds = json.loads(SEEDS.read_text())
-    ids = [ObjectId(bruto) for bruto in seeds.get("cpf_repetido", [])]
+    ids = _ids_do_par()
     if len(ids) < 2:
         raise HTTPException(status_code=503, detail="Seed sem par de CPF repetido; rode seed_data.py --drop.")
 

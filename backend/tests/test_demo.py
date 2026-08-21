@@ -25,8 +25,11 @@ class ColecaoFalsa:
         self.filtros.append(filtro)
         return self
 
-    def limit(self, _n):
-        return list(self.documentos)
+    def sort(self, *_a, **_kw):
+        return self
+
+    def limit(self, n):
+        return list(self.documentos)[:n]
 
     def __iter__(self):
         return iter(self.documentos)
@@ -117,3 +120,46 @@ def test_par_ausente_falha_em_vez_de_afirmar_o_contrario(monkeypatch, cliente, t
     resposta = cliente.get("/demo/par-repetido")
     assert resposta.status_code == 503
     assert "seed" in resposta.json()["detail"].lower()
+
+
+def test_exemplos_nao_repete_cpf_do_par_plantado(monkeypatch, cliente):
+    """O par plantado divide o mesmo CPF. Oferecer os dois como opções distintas
+    faria a mesma busca trazer dois titulares antes de a tela explicar por quê."""
+    docs = [
+        {"_id": "1", "nome": "Natália", "cpf": "99925626170", "salario": 16119, "uf": "CE"},
+        {"_id": "2", "nome": "Helena", "cpf": "99925626170", "salario": 19174, "uf": "MG"},
+        {"_id": "3", "nome": "Rafael", "cpf": "99944894613", "salario": 13586, "uf": "PR"},
+    ]
+    colecao = ColecaoFalsa(docs)
+    monkeypatch.setattr(demo, "_colecao", lambda _c: colecao)
+    monkeypatch.setattr(demo, "cliente_cifrado", lambda: colecao)
+
+    titulares = cliente.get("/demo/exemplos").json()["titulares"]
+    assert [t["cpf"] for t in titulares] == ["99925626170", "99944894613"]
+
+
+def test_exemplos_respeita_a_quantidade_pedida(monkeypatch, cliente):
+    # A folga que compensa o par plantado não pode vazar para a resposta.
+    docs = [{"_id": str(i), "nome": f"T{i}", "cpf": f"999{i:08d}", "salario": 1, "uf": "SP"}
+            for i in range(10)]
+    colecao = ColecaoFalsa(docs)
+    monkeypatch.setattr(demo, "_colecao", lambda _c: colecao)
+    monkeypatch.setattr(demo, "cliente_cifrado", lambda: colecao)
+
+    assert len(cliente.get("/demo/exemplos", params={"quantos": 4}).json()["titulares"]) == 4
+
+
+def test_exemplos_exclui_o_par_plantado_da_consulta(monkeypatch, cliente, tmp_path):
+    """Oferecer metade do par como titular padrão faz a primeira busca da demo
+    devolver dois documentos para um CPF — antes de a tela ter explicado o par.
+    Parece defeito, e é a primeira impressão que o cliente tem."""
+    seeds = tmp_path / "demo_seeds.json"
+    seeds.write_text('{"cpf_repetido": ["6a88642d52a60188aa9827fb", "6a88642d52a60188aa9827fc"]}')
+    monkeypatch.setattr(demo, "SEEDS", seeds)
+    colecao = ColecaoFalsa([{"_id": "9", "nome": "T", "cpf": "99911122233", "salario": 1, "uf": "SP"}])
+    monkeypatch.setattr(demo, "_colecao", lambda _c: colecao)
+    monkeypatch.setattr(demo, "cliente_cifrado", lambda: colecao)
+
+    cliente.get("/demo/exemplos")
+    assert "_id" in colecao.filtros[0]
+    assert len(colecao.filtros[0]["_id"]["$nin"]) == 2
