@@ -1,0 +1,23 @@
+# Credenciais e material de chave — nunca commitados.
+backend/.env
+backend/secrets/
+*.bin
+
+# crypt_shared: baixada por scripts/instalar-crypt-shared.sh, ~30 MB.
+backend/lib/
+
+# Estado local
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+.remember/
+.claude/
+
+# Seeds gerados
+backend/data/demo_seeds.json

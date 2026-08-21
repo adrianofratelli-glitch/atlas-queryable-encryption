@@ -1,0 +1,161 @@
+import logging
+import re
+import uuid
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from encryption import (
+    COLECAO_CIFRADA,
+    COLECAO_CLARA,
+    cliente_claro,
+    fechar_clientes,
+    readiness,
+    versao_servidor,
+)
+from routers import cofre, consultas, custo, fronteiras, shredding, visoes
+from security import ApiHardeningMiddleware, MutationGuardMiddleware
+from settings import settings
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger("qe.api")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        fechar_clientes()
+
+
+app = FastAPI(title="Atlas Queryable Encryption", version="1.0.0", lifespan=lifespan)
+REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+app.add_middleware(ApiHardeningMiddleware)
+app.add_middleware(MutationGuardMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.allowed_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Demo-Token", "X-Request-ID"],
+)
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    supplied_request_id = request.headers.get("x-request-id", "")
+    request_id = supplied_request_id if REQUEST_ID_RE.fullmatch(supplied_request_id) else uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder({"detail": "Parâmetros inválidos.", "errors": exc.errors()}),
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", "unknown")
+    # exc_info vai para o log; a resposta carrega só o request_id. Nesta PoV isso
+    # deixa de ser higiene e vira requisito: um traceback com o documento dentro
+    # imprimiria plaintext de campo cifrado, que é exatamente o vazamento que o
+    # cliente está pagando para evitar.
+    logger.exception("Falha não tratada request_id=%s", request_id, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Falha interna na demonstração.", "request_id": request_id},
+    )
+
+
+app.include_router(cofre.router)
+app.include_router(visoes.router)
+app.include_router(consultas.router)
+app.include_router(fronteiras.router)
+app.include_router(shredding.router)
+app.include_router(custo.router)
+
+
+@app.get("/")
+def root():
+    return {"status": "ok", "poc": "Atlas Queryable Encryption", "version": app.version}
+
+
+@app.get("/health/live")
+def health_live():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def health_ready():
+    ok, message = readiness()
+    return JSONResponse(status_code=200 if ok else 503, content={"ready": ok, "message": message})
+
+
+@app.get("/preflight")
+def preflight():
+    mongo_ok, mongo_message = readiness()
+    checks = {
+        "mongo_uri": {"ok": bool(settings.mongo_uri), "message": "configurada" if settings.mongo_uri else "ausente"},
+        "mongodb": {"ok": mongo_ok, "message": mongo_message},
+        "crypt_shared": {
+            "ok": settings.crypt_shared_disponivel,
+            "message": (
+                "carregada" if settings.crypt_shared_disponivel
+                else "ausente — rode scripts/instalar-crypt-shared.sh"
+            ),
+        },
+        "mutation_guard": {
+            "ok": True,
+            "message": "token obrigatório" if settings.demo_admin_token else "somente localhost/origens permitidas",
+        },
+    }
+
+    if mongo_ok:
+        maior, menor, versao = versao_servidor()
+        # Sem esta checagem o erro que aparece é de comando desconhecido, e ele
+        # não menciona versão nem Queryable Encryption em lugar nenhum.
+        checks["versao_servidor"] = {
+            "ok": maior >= 7,
+            "message": f"MongoDB {versao}" + ("" if maior >= 7 else " — Queryable Encryption exige 7.0+"),
+        }
+        checks["range_ga"] = {
+            "ok": maior >= 8,
+            "message": f"MongoDB {versao}" + ("" if maior >= 8 else " — consulta por faixa é GA a partir do 8.0"),
+        }
+        checks.update(cofre.preflight_checks())
+        nomes = set(cliente_claro()[settings.mongo_db].list_collection_names())
+        for colecao in (COLECAO_CIFRADA, COLECAO_CLARA):
+            checks[f"collection_{colecao}"] = {
+                "ok": colecao in nomes,
+                "message": "disponível" if colecao in nomes else "execute seed_data.py",
+            }
+
+    # `range_ga` é informativo: em 7.0 a PoV roda com igualdade e o módulo 03
+    # degrada a faixa, em vez de reprovar o pré-voo inteiro.
+    opcionais = {"range_ga"}
+    ready = all(check["ok"] for chave, check in checks.items() if chave not in opcionais)
+    return JSONResponse(status_code=200 if ready else 503, content={"ready": ready, "checks": checks})
+
+
+@app.get("/stats")
+def stats():
+    db = cliente_claro()[settings.mongo_db]
+    return {
+        "db": settings.mongo_db,
+        "clientes": db[COLECAO_CIFRADA].estimated_document_count(),
+        "clientes_claro": db[COLECAO_CLARA].estimated_document_count(),
+        "kms": settings.kms_provider,
+        "qe_pronto": settings.qe_configured,
+    }
