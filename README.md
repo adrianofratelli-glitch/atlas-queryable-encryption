@@ -5,72 +5,41 @@ resposta é: o DBA, o time de infraestrutura, quem tem acesso ao backup e o prov
 Criptografia em repouso e em trânsito não muda isso — nos dois casos o banco decifra para
 poder trabalhar.
 
-Esta PoV mostra o **MongoDB Queryable Encryption** contra um cluster real: campos cifrados com
-chave do cliente, que continuam sendo filtrados por igualdade e por faixa, sem que o servidor
-veja plaintext em momento algum — nem em repouso, nem em trânsito, nem em uso, nem no log, nem
-no backup.
-
-> **Queryable Encryption, não CSFLE.** CSFLE (2019) consulta campo cifrado de forma
-> determinística: o mesmo valor produz sempre o mesmo ciphertext, o que permite igualdade e
-> vaza frequência — com o dump em mãos dá para ver qual valor se repete. Queryable Encryption
-> é randomizado e continua consultável, por igualdade e por faixa.
-
----
+**MongoDB Queryable Encryption** cifra o campo com a chave do cliente e ainda assim o filtra,
+por igualdade e por faixa, sem que o servidor veja plaintext em momento nenhum: nem em repouso,
+nem em trânsito, nem em uso, nem no log, nem no backup.
 
 ## A demo
 
-### 1. Duas visões do mesmo documento
+Uma tela. Você digita um CPF, e o mesmo filtro sai ao mesmo tempo por **dois clientes contra o
+mesmo cluster**: a sua aplicação, com auto-encryption, e um cliente comum — o DBA, o operador
+do Atlas, quem levar o backup.
 
-A mesma query, no mesmo instante, por dois clientes contra o mesmo cluster. À esquerda a
-aplicação, com auto-encryption. À direita o que enxerga quem tem credencial de leitura no banco.
-Mesmos `_id`, mesmos campos em claro, campos sensíveis como `Binary(subtype 6)`.
+A aplicação acha o documento e lê o CPF. O cliente comum recebe `Binary(subtype 6)` e, ao
+filtrar pelo mesmo valor, **acha zero**.
 
-O par destacado tem o **mesmo CPF nos dois titulares e ciphertexts diferentes** — é o que CSFLE
-não faz.
+![A busca por CPF nos dois clientes](docs/screenshots/demo.png)
 
-![Duas visões: aplicação e DBA lado a lado](docs/screenshots/02-duas-visoes.png)
+Há três botões, e cada um responde a uma objeção:
 
-### 2. Igualdade e faixa sobre ciphertext
+| Botão | O que prova |
+|---|---|
+| **Buscar por igualdade** | filtro por campo cifrado funciona — sem ciphertext determinístico |
+| **Buscar por faixa** | `$gte`/`$lte` sobre campo cifrado, o que ninguém espera que funcione (GA no 8.0) |
+| **Buscar por UF** | o controle do experimento: campo em claro, os dois lados acham o mesmo |
 
-O driver cifra o valor da busca e envia o ciphertext; o servidor casa contra estruturas de
-metadados cifradas que ele consegue usar sem conseguir interpretar. Ao lado, o mesmo filtro pelo
-cliente comum retornando **zero documentos** — o valor em claro não casa com nada.
+E o botão **Mostrar o par** exibe dois titulares diferentes com o **mesmo CPF** produzindo
+ciphertexts distintos. É o que separa Queryable Encryption do resto: se fossem iguais, quem
+tem o dump contaria repetições e reidentificaria.
 
-![Consulta por igualdade e por faixa](docs/screenshots/03-consulta.png)
+## Por que não é o que você já tem
 
-### 3. As fronteiras, ditas antes de o cliente descobrir sozinho
-
-`sort`, `regex`, `$search`, `$group`, `$lookup`, índice comum e `$inc` sobre campo cifrado.
-Cada tentativa roda de verdade e mostra o erro do servidor. E, no fim da página, a modelagem
-alternativa — um campo de faixa derivado em claro ao lado do valor cifrado — que é a resposta,
-não o consolo.
-
-![Fronteiras e modelagem alternativa](docs/screenshots/04-fronteiras.png)
-
-### 4. Crypto shredding
-
-Apagar a DEK torna todo campo cifrado por ela matematicamente irrecuperável, inclusive nos
-backups já feitos e nas réplicas já propagadas. O registro continua existindo e contabilizável;
-o conteúdo pessoal não é mais legível por ninguém — LGPD art. 18 sem conflito com a retenção
-obrigatória do Bacen.
-
-![Linha do tempo do crypto shredding](docs/screenshots/05-shredding.png)
-
-### 5. O preço
-
-Storage e latência das duas coleções, com as coleções de metadados `enxcol_.*` contadas junto.
-Todo número carrega o tier do cluster e o tamanho da amostra ao lado.
-
-![Comparativo de custo](docs/screenshots/06-custo.png)
-
-Os números acima foram medidos contra um M20 em `sa-east-1` com 100.000 titulares nas duas
-coleções: **63× em storage** — 984 MB contra 15,6 MB, com as `enxcol_.*` contadas — que em
-overhead por documento dá cerca de **9,5 kB**, ou 1,9 kB por campo cifrado. O múltiplo é grande
-porque o documento em claro é pequeno; o overhead por campo é que é praticamente constante.
-Outro tier e outro tamanho de documento dão outro número, e a tela exibe os dois ao lado de
-cada medição.
-
----
+| | |
+|---|---|
+| TDE, disco cifrado | cifra em repouso; quem tem credencial de leitura vê tudo em claro |
+| CSFLE determinístico | permite igualdade porque o mesmo valor vira o mesmo ciphertext — e é isso que vaza frequência |
+| `pgcrypto`, cifrar na aplicação | protege o valor, mas o banco deixa de conseguir filtrar por ele |
+| **Queryable Encryption** | **ciphertext randomizado e consultável: igualdade e faixa, com a chave fora do servidor** |
 
 ## Requisitos
 
@@ -109,12 +78,32 @@ curl http://localhost:8300/preflight
 ```
 
 O preflight checa `MONGO_URI`, alcance do cluster, versão do servidor, presença da
-`crypt_shared`, o cofre, as duas coleções e o modo da guarda de mutação.
+`crypt_shared`, o cofre, as duas coleções e o modo da guarda de mutação. Ele existe porque, sem
+ele, um cluster em versão errada falha com "comando desconhecido" — uma mensagem que não
+menciona criptografia em lugar nenhum.
+
+## Como funciona
+
+```
+React (frontend/, :5300) ──fetch──> FastAPI (backend/, :8300)
+                                        │
+                                        ├── MongoClient CIFRADO (AutoEncryptionOpts) ──> Atlas
+                                        ├── MongoClient CLARO  (a "visão do DBA")    ──> Atlas
+                                        └── KMS local ou AWS KMS
+```
+
+**Os dois clientes de `backend/encryption.py` são a PoV inteira**, não um detalhe de
+implementação: o painel dividido da tela é literalmente os dois lado a lado.
+
+A coleção `clientes` é a cifrada; `clientes_claro` guarda os mesmos documentos com os mesmos
+`_id`, em claro, para o contraste. O driver cifra o valor da busca com a mesma DEK e envia o
+ciphertext; o servidor casa contra estruturas de metadados (`enxcol_.*`) que ele mantém sem
+conseguir interpretar.
 
 ## Testes
 
 ```bash
-pytest                        # 34 testes, nenhum precisa de cluster
+pytest                        # nenhum precisa de cluster, de crypt_shared ou de KMS
 ruff check backend scripts
 ```
 
@@ -124,8 +113,7 @@ ruff check backend scripts
   do controle de versão. KMS local é para demonstração — em produção use AWS KMS, Azure Key
   Vault, GCP KMS ou KMIP.
 - Nenhum endpoint devolve chave mestra, DEK decifrada ou `keyMaterial` completo.
-- Vários endpoints são destrutivos por natureza (apagar DEK, dropar coleção). **Nunca aponte
-  esta PoV para nada além de um cluster de demonstração descartável.**
+- **Nunca aponte esta PoV para nada além de um cluster de demonstração descartável.**
 - O dataset é sintético. Os CPF têm dígito verificador válido e prefixo `999`, uma faixa não
   emitida: eles não pertencem a ninguém.
 

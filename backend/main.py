@@ -17,7 +17,7 @@ from encryption import (
     readiness,
     versao_servidor,
 )
-from routers import cofre, consultas, custo, fronteiras, shredding, visoes
+from routers import demo
 from security import ApiHardeningMiddleware, MutationGuardMiddleware
 from settings import settings
 
@@ -79,12 +79,7 @@ async def unexpected_error(request: Request, exc: Exception):
     )
 
 
-app.include_router(cofre.router)
-app.include_router(visoes.router)
-app.include_router(consultas.router)
-app.include_router(fronteiras.router)
-app.include_router(shredding.router)
-app.include_router(custo.router)
+app.include_router(demo.router)
 
 
 @app.get("/")
@@ -134,7 +129,7 @@ def preflight():
             "ok": maior >= 8,
             "message": f"MongoDB {versao}" + ("" if maior >= 8 else " — consulta por faixa é GA a partir do 8.0"),
         }
-        checks.update(cofre.preflight_checks())
+        checks.update(demo.preflight_checks())
         nomes = set(cliente_claro()[settings.mongo_db].list_collection_names())
         for colecao in (COLECAO_CIFRADA, COLECAO_CLARA):
             checks[f"collection_{colecao}"] = {
