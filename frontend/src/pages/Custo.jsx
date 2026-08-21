@@ -11,6 +11,21 @@ const bytes = (n) => {
   return `${n} B`
 }
 
+/** A latência da rede até o cluster entra em todo número desta tela. Sem ela ao
+ *  lado, o custo do RTT vira "custo da criptografia" na cabeça de quem assiste. */
+function Base({ base }) {
+  if (!base) return null
+  return (
+    <>
+      <p className="legenda" style={{ marginTop: 10 }}>
+        Linha de base da rede ({base.n} pings): p50 {base.p50} ms · p95 {base.p95} ms.
+        Todo número acima já a inclui.
+      </p>
+      {base.suspeito && <div className="aviso aviso--perigo"><span>⚠️</span><span>{base.nota}</span></div>}
+    </>
+  )
+}
+
 export default function Custo() {
   const apiStorage = useApi()
   const apiEscrita = useApi()
@@ -79,6 +94,9 @@ export default function Custo() {
                 <div className="metrica__rotulo">fator</div>
               </div>
             </div>
+            <p className="legenda" style={{ marginTop: 10 }}>
+              {storage.nota_tier} Amostra: {storage.cifrada.documentos} documentos, {storage.campos_cifrados} campos cifrados.
+            </p>
             {storage.aviso && <div className="aviso aviso--perigo"><span>⚠️</span><span>{storage.aviso}</span></div>}
           </>
         )}
@@ -87,7 +105,7 @@ export default function Custo() {
       <div className="card">
         <h2>Latência de escrita</h2>
         <button className="acao" disabled={apiEscrita.loading}
-          onClick={() => apiEscrita.call('/custo/escrita', { timeoutMs: 180_000 }).then(setEscrita)}>
+          onClick={() => apiEscrita.call('/custo/escrita', { timeoutMs: 600_000 }).then(setEscrita)}>
           {apiEscrita.loading ? 'medindo…' : 'Medir escrita'}
         </button>
         {!escrita && <div style={{ marginTop: 14 }}><span className="selo selo--medir">A MEDIR</span></div>}
@@ -110,6 +128,7 @@ export default function Custo() {
                 </tr>
               </tbody>
             </table>
+            <Base base={escrita.linha_de_base_ms} />
             <div className="aviso"><span>ℹ️</span><span>{escrita.onde_esta_o_custo}</span></div>
             <p className="legenda" style={{ marginTop: 10 }}>
               Primeira operação (paga a abertura da DEK contra o KMS, que é rede):
@@ -124,7 +143,7 @@ export default function Custo() {
       <div className="card">
         <h2>Latência de leitura</h2>
         <button className="acao" disabled={apiLeitura.loading}
-          onClick={() => apiLeitura.call('/custo/leitura', { timeoutMs: 180_000 }).then(setLeitura)}>
+          onClick={() => apiLeitura.call('/custo/leitura', { timeoutMs: 600_000 }).then(setLeitura)}>
           {apiLeitura.loading ? 'medindo…' : 'Medir leitura'}
         </button>
         {!leitura && <div style={{ marginTop: 14 }}><span className="selo selo--medir">A MEDIR</span></div>}
@@ -143,8 +162,9 @@ export default function Custo() {
                 ))}
               </tbody>
             </table>
+            <Base base={leitura.linha_de_base_ms} />
             <p className="legenda" style={{ marginTop: 10 }}>
-              {leitura.nota} Aquecimento: {leitura.aquecimento} leituras por cenário.
+              {leitura.nota} Aquecimento: {leitura.aquecimento} leituras por cenário. {leitura.nota_tier}
             </p>
             <Bloco dados={leitura.resultados} rotulo="Ver resultados brutos" />
           </>

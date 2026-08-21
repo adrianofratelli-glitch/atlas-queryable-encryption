@@ -21,3 +21,6 @@ frontend/dist/
 
 # Seeds gerados
 backend/data/demo_seeds.json
+
+# Saída do Playwright MCP (screenshots vão para docs/screenshots/)
+.playwright-mcp/

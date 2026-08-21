@@ -135,9 +135,18 @@ def storage():
             "criptografia: o custo por campo cifrado é praticamente constante. "
             "Documento pequeno infla o múltiplo. Use o overhead por documento."
         ),
+        "tier": settings.cluster_tier or None,
+        "nota_tier": _nota_tier(),
         "mesmo_dataset": mesmo_dataset,
         "aviso": None if mesmo_dataset else "As duas coleções têm contagens diferentes; rode seed_data.py --drop antes de comparar.",
     }
+
+
+def _nota_tier() -> str:
+    """Um número de latência ou de storage sem o tier ao lado não significa nada."""
+    if settings.cluster_tier:
+        return f"Medido em {settings.cluster_tier}. Outro tier dá outro número."
+    return "Preencha QE_CLUSTER_TIER no .env; um número sem tier ao lado não significa nada."
 
 
 def _percentis(amostras: list[float]) -> dict:
@@ -217,8 +226,8 @@ def escrita(docs: int = Query(None, ge=10, le=5_000)):
             "local, não no cluster: a cifragem acontece na aplicação. Este número "
             "depende do hardware do apresentador."
         ),
-        "tier": None,
-        "nota_tier": "Preencha o tier do cluster ao apresentar; um número sem tier ao lado não significa nada.",
+        "tier": settings.cluster_tier or None,
+        "nota_tier": _nota_tier(),
     }
 
 
@@ -264,5 +273,7 @@ def leitura(repeticoes: int = Query(30, ge=5, le=500)):
         "linha_de_base_ms": base,
         "resultados": resultado,
         "acima_da_base": {nome: _acima_da_base(valores, base) for nome, valores in resultado.items()},
+        "tier": settings.cluster_tier or None,
+        "nota_tier": _nota_tier(),
         "nota": "Aquecido dos dois lados com o mesmo número de leituras antes de medir.",
     }

@@ -28,7 +28,7 @@ Mesmos `_id`, mesmos campos em claro, campos sensíveis como `Binary(subtype 6)`
 O par destacado tem o **mesmo CPF nos dois titulares e ciphertexts diferentes** — é o que CSFLE
 não faz.
 
-<!-- ![Duas visões: aplicação e DBA lado a lado](docs/screenshots/02-duas-visoes.png) -->
+![Duas visões: aplicação e DBA lado a lado](docs/screenshots/02-duas-visoes.png)
 
 ### 2. Igualdade e faixa sobre ciphertext
 
@@ -36,7 +36,7 @@ O driver cifra o valor da busca e envia o ciphertext; o servidor casa contra est
 metadados cifradas que ele consegue usar sem conseguir interpretar. Ao lado, o mesmo filtro pelo
 cliente comum retornando **zero documentos** — o valor em claro não casa com nada.
 
-<!-- ![Consulta por igualdade e por faixa](docs/screenshots/03-consulta.png) -->
+![Consulta por igualdade e por faixa](docs/screenshots/03-consulta.png)
 
 ### 3. As fronteiras, ditas antes de o cliente descobrir sozinho
 
@@ -45,7 +45,7 @@ Cada tentativa roda de verdade e mostra o erro do servidor. E, no fim da página
 alternativa — um campo de faixa derivado em claro ao lado do valor cifrado — que é a resposta,
 não o consolo.
 
-<!-- ![Fronteiras e modelagem alternativa](docs/screenshots/04-fronteiras.png) -->
+![Fronteiras e modelagem alternativa](docs/screenshots/04-fronteiras.png)
 
 ### 4. Crypto shredding
 
@@ -54,14 +54,21 @@ backups já feitos e nas réplicas já propagadas. O registro continua existindo
 o conteúdo pessoal não é mais legível por ninguém — LGPD art. 18 sem conflito com a retenção
 obrigatória do Bacen.
 
-<!-- ![Linha do tempo do crypto shredding](docs/screenshots/05-shredding.png) -->
+![Linha do tempo do crypto shredding](docs/screenshots/05-shredding.png)
 
 ### 5. O preço
 
 Storage e latência das duas coleções, com as coleções de metadados `enxcol_.*` contadas junto.
 Todo número carrega o tier do cluster e o tamanho da amostra ao lado.
 
-<!-- ![Comparativo de custo](docs/screenshots/06-custo.png) -->
+![Comparativo de custo](docs/screenshots/06-custo.png)
+
+Os números acima foram medidos contra um M20 em `sa-east-1` com 100.000 titulares nas duas
+coleções: **63× em storage** — 984 MB contra 15,6 MB, com as `enxcol_.*` contadas — que em
+overhead por documento dá cerca de **9,5 kB**, ou 1,9 kB por campo cifrado. O múltiplo é grande
+porque o documento em claro é pequeno; o overhead por campo é que é praticamente constante.
+Outro tier e outro tamanho de documento dão outro número, e a tela exibe os dois ao lado de
+cada medição.
 
 ---
 
@@ -107,7 +114,7 @@ O preflight checa `MONGO_URI`, alcance do cluster, versão do servidor, presenç
 ## Testes
 
 ```bash
-pytest                        # 32 testes, nenhum precisa de cluster
+pytest                        # 34 testes, nenhum precisa de cluster
 ruff check backend scripts
 ```
 

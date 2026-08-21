@@ -23,7 +23,7 @@ export function useApi() {
     if (!mounted.current) return null
     const { timeoutMs: requestedTimeout = REQUEST_TIMEOUT_MS, ...fetchOptions } = options
     const timeoutMs = Number.isFinite(requestedTimeout)
-      ? Math.max(1_000, Math.min(requestedTimeout, 300_000))
+      ? Math.max(1_000, Math.min(requestedTimeout, 600_000))
       : REQUEST_TIMEOUT_MS
     pending.current += 1
     setLoading(true)
