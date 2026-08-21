@@ -18,14 +18,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from encryption import COLECAO_CIFRADA, COLECAO_CLARA, cliente_claro, key_vault_collection  # noqa: E402
+from encryption import COLECAO_CIFRADA, cliente_claro, key_vault_collection  # noqa: E402
 from settings import settings  # noqa: E402
+
+# Coleções de versões anteriores desta PoV, que tinha uma cópia em claro para
+# medir storage e uma coorte separada para crypto shredding. Continuam no escopo
+# porque quem rodou o seed antigo tem cem mil CPF legíveis paradas no cluster, e
+# um script de limpeza que as ignora deixa exatamente o que ninguém quer deixar.
+LEGADO = ("clientes_claro", "clientes_tenant_beta")
 
 ESCOPO = (
     COLECAO_CIFRADA,
     f"enxcol_.{COLECAO_CIFRADA}.esc",
     f"enxcol_.{COLECAO_CIFRADA}.ecoc",
-    COLECAO_CLARA,
+    *LEGADO,
+    *(f"enxcol_.clientes_tenant_beta.{sufixo}" for sufixo in ("esc", "ecoc")),
 )
 
 

@@ -11,9 +11,9 @@ nem em trânsito, nem em uso, nem no log, nem no backup.
 
 ## A demo
 
-Uma tela. Você digita um CPF, e o mesmo filtro sai ao mesmo tempo por **dois clientes contra o
-mesmo cluster**: a sua aplicação, com auto-encryption, e um cliente comum — o DBA, o operador
-do Atlas, quem levar o backup.
+Uma tela. Você escolhe um titular da base — ou digita outro CPF — e o mesmo filtro sai ao mesmo
+tempo por **dois clientes contra a mesma coleção**: a sua aplicação, com auto-encryption, e um
+cliente comum, com as mesmas credenciais de banco que o DBA já tem hoje.
 
 A aplicação acha o documento e lê o CPF. O cliente comum recebe `Binary(subtype 6)` e, ao
 filtrar pelo mesmo valor, **acha zero**.
@@ -64,7 +64,7 @@ python scripts/gerar-master-key.py     # 96 bytes em backend/secrets/, modo 0600
 
 # Cofre e dados
 python scripts/criar-cofre.py          # índice do keyVault + as DEKs da demo
-python backend/seed_data.py            # 5.000 titulares nas duas coleções
+python backend/seed_data.py            # 5.000 titulares na coleção cifrada
 
 # Frontend
 cd frontend && npm install && cd ..
@@ -78,7 +78,7 @@ curl http://localhost:8300/preflight
 ```
 
 O preflight checa `MONGO_URI`, alcance do cluster, versão do servidor, presença da
-`crypt_shared`, o cofre, as duas coleções e o modo da guarda de mutação. Ele existe porque, sem
+`crypt_shared`, o cofre, a coleção e o modo da guarda de mutação. Ele existe porque, sem
 ele, um cluster em versão errada falha com "comando desconhecido" — uma mensagem que não
 menciona criptografia em lugar nenhum.
 
@@ -95,10 +95,12 @@ React (frontend/, :5300) ──fetch──> FastAPI (backend/, :8300)
 **Os dois clientes de `backend/encryption.py` são a PoV inteira**, não um detalhe de
 implementação: o painel dividido da tela é literalmente os dois lado a lado.
 
-A coleção `clientes` é a cifrada; `clientes_claro` guarda os mesmos documentos com os mesmos
-`_id`, em claro, para o contraste. O driver cifra o valor da busca com a mesma DEK e envia o
-ciphertext; o servidor casa contra estruturas de metadados (`enxcol_.*`) que ele mantém sem
-conseguir interpretar.
+**Há uma coleção só.** `clientes` é a cifrada, e os dois painéis leem ela — o que muda entre
+eles é o cliente, não o destino da query. As `enxcol_.*` ao lado são os metadados que o próprio
+servidor mantém para conseguir casar a busca; ele as usa sem conseguir interpretá-las.
+
+O driver cifra o valor da busca com a mesma DEK e envia o ciphertext. Nenhum plaintext atravessa
+a rede.
 
 ## Testes
 

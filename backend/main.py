@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 
 from encryption import (
     COLECAO_CIFRADA,
-    COLECAO_CLARA,
     cliente_claro,
     fechar_clientes,
     readiness,
@@ -131,7 +130,7 @@ def preflight():
         }
         checks.update(demo.preflight_checks())
         nomes = set(cliente_claro()[settings.mongo_db].list_collection_names())
-        for colecao in (COLECAO_CIFRADA, COLECAO_CLARA):
+        for colecao in (COLECAO_CIFRADA,):
             checks[f"collection_{colecao}"] = {
                 "ok": colecao in nomes,
                 "message": "disponível" if colecao in nomes else "execute seed_data.py",
@@ -150,7 +149,6 @@ def stats():
     return {
         "db": settings.mongo_db,
         "clientes": db[COLECAO_CIFRADA].estimated_document_count(),
-        "clientes_claro": db[COLECAO_CLARA].estimated_document_count(),
         "kms": settings.kms_provider,
         "qe_pronto": settings.qe_configured,
     }

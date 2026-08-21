@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Cria o cofre de chaves: índice único do keyVault e as três DEKs da demo.
-
-As três estratégias existem ao mesmo tempo de propósito. O contraste é o ponto
-pedagógico do módulo 05: uma DEK por titular dá o direito ao esquecimento mais
-limpo que existe e cobra em documentos no cofre, chamadas ao KMS e pressão de
-cache; uma DEK por inquilino é o desenho que a maioria dos clientes adota. Ter
-as três na tela transforma "qual é o jeito certo" em "qual é o seu caso".
+"""Cria o cofre de chaves: índice único do keyVault e uma DEK por campo cifrado.
 """
 
 from __future__ import annotations
@@ -26,7 +20,7 @@ from settings import settings  # noqa: E402
 
 # Uma DEK por campo por coleção — não é escolha nossa: o Queryable Encryption
 # recusa a coleção se dois campos compartilharem keyId (`Duplicate key ids are
-# not allowed`, code 6338401). Cinco campos em duas coleções são dez DEKs.
+# not allowed`, code 6338401). Cinco campos cifrados são cinco DEKs.
 NOMES = nomes_dek()
 
 

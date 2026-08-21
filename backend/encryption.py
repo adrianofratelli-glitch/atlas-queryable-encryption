@@ -28,22 +28,19 @@ from settings import settings
 APP_NAME = "atlas-queryable-encryption"
 
 COLECAO_CIFRADA = "clientes"
-COLECAO_CLARA = "clientes_claro"
-# Segunda coleção cifrada, com o SEU PRÓPRIO conjunto de DEKs. Existe por causa
-# de um limite real do produto, e não por gosto de simetria: com auto-encryption
-# a chave é ligada por CAMPO DE UMA COLEÇÃO, nunca por documento. Não existe
-# "uma DEK por titular" dentro de uma coleção. A unidade de crypto shredding é o
-# escopo da chave, e esse escopo se escolhe na modelagem — por campo (nativo) ou
-# por coorte, separando coleções. O módulo 05 apaga as chaves desta coleção e
-# prova que `clientes` continua lendo normalmente.
-COLECAO_CIFRADA_BETA = "clientes_tenant_beta"
+# UMA coleção, e só uma. Os dois painéis da tela leem esta mesma coleção — o que
+# muda entre eles é o CLIENTE (com e sem AutoEncryptionOpts), nunca o destino da
+# query. Uma segunda coleção com os mesmos dados em claro existiu enquanto a PoV
+# media overhead de storage; ela sumiu junto com aquela tela, e ainda bem: cem
+# mil CPF legíveis num projeto que argumenta que ninguém consegue ler o dado é o
+# tipo de coisa que derruba a reunião se alguém abrir o Compass.
 
 # Ordem fixa: ela define os nomes das DEKs, e renomear DEK depois do seed obriga
 # a recriar a coleção.
 CAMPOS_CIFRADOS = ("cpf", "email", "salario", "score_credito", "observacoes")
 CAMPOS_CLAROS = ("nome", "cidade", "uf", "tenant_id", "faixa_salarial", "cadastro_em")
 
-COLECOES_CIFRADAS = (COLECAO_CIFRADA, COLECAO_CIFRADA_BETA)
+COLECOES_CIFRADAS = (COLECAO_CIFRADA,)
 
 
 def nome_dek(colecao: str, campo: str) -> str:
@@ -52,8 +49,7 @@ def nome_dek(colecao: str, campo: str) -> str:
     Não é escolha de modelagem: o Queryable Encryption recusa a coleção se dois
     campos compartilharem keyId — `Duplicate key ids are not allowed`, code
     6338401, vindo da própria crypt_shared antes de a requisição sair da
-    máquina. Cinco campos cifrados em duas coleções são dez DEKs, e é isso que
-    dá ao módulo 05 a granularidade por campo de graça.
+    máquina. Cinco campos cifrados são cinco DEKs.
     """
     return f"dek-{colecao}-{campo}"
 
@@ -137,7 +133,7 @@ def limpar_cache_deks() -> None:
 
 
 def encrypted_fields() -> dict:
-    """encryptedFieldsMap das duas coleções cifradas, cada campo com sua DEK."""
+    """encryptedFieldsMap da coleção cifrada, cada campo com sua DEK."""
     return {
         f"{settings.mongo_db}.{colecao}": {"fields": _campos(colecao)}
         for colecao in COLECOES_CIFRADAS

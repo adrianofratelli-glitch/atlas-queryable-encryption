@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""Seed determinístico das duas coleções.
+"""Seed determinístico da coleção cifrada.
 
-Escreve os MESMOS documentos, com os MESMOS _id, em `clientes` (pelo cliente
-cifrado) e `clientes_claro` (pelo cliente claro). O mesmo _id dos dois lados é o
-que permite ao módulo 02 provar que é o mesmo dado e ao módulo 06 comparar
-documento a documento.
+Escreve em `clientes` pelo cliente CIFRADO — é a aplicação gravando, e o
+plaintext nunca sai desta máquina. Uma coleção só: o contraste da tela vem de
+dois CLIENTES lendo a mesma coleção, não de duas coleções.
 
-Este é o único lugar da PoV que escreve em `clientes_claro`.
-
-    python seed_data.py            # 5.000 titulares
-    python seed_data.py --full     # 100.000, para o storage do módulo 06 significar algo
+    python seed_data.py            # 5.000 titulares — basta para a demo
+    python seed_data.py --full     # 100.000; leva bem mais tempo e a tela não precisa
     python seed_data.py --drop     # recria do zero (leva junto as enxcol_.*)
 """
 
@@ -29,8 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from encryption import (  # noqa: E402
     COLECAO_CIFRADA,
-    COLECAO_CIFRADA_BETA,
-    COLECAO_CLARA,
     cliente_cifrado,
     cliente_claro,
     encrypted_fields,
@@ -120,10 +115,8 @@ def dropar(db_claro) -> None:
     """Dropar coleção cifrada tem que levar junto as enxcol_.*. Metadata órfã de
     uma coleção que não existe mais faz a recriação falhar com uma mensagem que
     não menciona isso em lugar nenhum."""
-    for cifrada in (COLECAO_CIFRADA, COLECAO_CIFRADA_BETA):
-        for nome in (cifrada, f"enxcol_.{cifrada}.esc", f"enxcol_.{cifrada}.ecoc"):
-            db_claro.drop_collection(nome)
-    db_claro.drop_collection(COLECAO_CLARA)
+    for nome in (COLECAO_CIFRADA, f"enxcol_.{COLECAO_CIFRADA}.esc", f"enxcol_.{COLECAO_CIFRADA}.ecoc"):
+        db_claro.drop_collection(nome)
 
 
 def criar_colecoes_cifradas(db_cifrado) -> None:
@@ -159,27 +152,20 @@ def main() -> int:
         return 0
 
     documentos, par = gerar(total)
-    print(f"→ escrevendo {total} titulares em {COLECAO_CIFRADA} (cifrado) e {COLECAO_CLARA} (claro)…")
+    print(f"→ escrevendo {total} titulares em {COLECAO_CIFRADA} (cifrado)…")
 
     lote = 500
     for inicio in range(0, len(documentos), lote):
         fatia = documentos[inicio:inicio + lote]
         db_cifrado[COLECAO_CIFRADA].insert_many([dict(doc) for doc in fatia])
-        db_claro[COLECAO_CLARA].insert_many([dict(doc) for doc in fatia])
-        # A coleção do tenant beta carrega SÓ o subconjunto dele, cifrado pela
-        # DEK própria. É o que torna o crypto shredding por coorte demonstrável:
-        # apagar aquela DEK não pode afetar o tenant alfa.
-        beta = [dict(doc) for doc in fatia if doc["tenant_id"] == TENANTS[1]]
-        if beta:
-            db_cifrado[COLECAO_CIFRADA_BETA].insert_many(beta)
         print(f"  {min(inicio + lote, len(documentos))}/{len(documentos)}", end="\r", flush=True)
 
     # Índices só em campo NÃO cifrado. Índice comum sobre campo cifrado é
     # recusado pelo servidor — o módulo 04 tenta um de propósito.
-    for colecao in (db_claro[COLECAO_CIFRADA], db_claro[COLECAO_CLARA]):
-        colecao.create_index("tenant_id")
-        colecao.create_index("uf")
-        colecao.create_index("cadastro_em")
+    colecao = db_claro[COLECAO_CIFRADA]
+    colecao.create_index("tenant_id")
+    colecao.create_index("uf")
+    colecao.create_index("cadastro_em")
 
     ARQUIVO_SEEDS.parent.mkdir(parents=True, exist_ok=True)
     ARQUIVO_SEEDS.write_text(json.dumps({
@@ -189,9 +175,7 @@ def main() -> int:
         "tenants": TENANTS,
     }, indent=2))
 
-    beta = db_claro[COLECAO_CIFRADA_BETA].estimated_document_count()
-    print(f"\n✅ {total} titulares em {COLECAO_CIFRADA} e {COLECAO_CLARA}; "
-          f"{beta} em {COLECAO_CIFRADA_BETA} (DEK própria).")
+    print(f"\n✅ {total} titulares em {COLECAO_CIFRADA} (cifrada).")
     print(f"   Par de CPF repetido gravado em {ARQUIVO_SEEDS.name}.")
     return 0
 
