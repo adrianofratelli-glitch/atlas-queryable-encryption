@@ -62,10 +62,6 @@ class Settings:
 
     # Ajustes da demo
     contention_factor: int = _int_env("QE_CONTENTION_FACTOR", 8, 0, 64)
-    bench_docs: int = _int_env("QE_BENCH_DOCS", 500, 10, 20_000)
-    # Rótulo do cluster que acompanha todo número do módulo 06. Número de
-    # latência ou de storage sem o tier ao lado não significa nada.
-    cluster_tier: str = os.getenv("QE_CLUSTER_TIER", "").strip()
 
     # Guardas
     demo_admin_token: str = os.getenv("DEMO_ADMIN_TOKEN", "").strip()
