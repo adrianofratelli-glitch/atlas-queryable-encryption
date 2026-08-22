@@ -24,3 +24,6 @@ backend/data/demo_seeds.json
 
 # Saída do Playwright MCP (screenshots vão para docs/screenshots/)
 .playwright-mcp/
+
+# Grafo de código gerado pelo graphify — reproduzível, nunca editado à mão.
+graphify-out/
