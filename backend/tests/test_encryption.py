@@ -5,8 +5,33 @@ a coleção — o único erro desta PoV que custa o dataset. Estes testes são o
 alarme: se alguém mexer no mapa sem querer, quebra aqui e não em produção.
 """
 
+import pytest
+from bson import Binary
+
 import encryption
 from settings import settings
+
+
+class CofreFalso:
+    """O cofre que `encrypted_fields()` consulta para resolver o keyId de cada
+    DEK. Sem este stub o teste abre conexão de verdade: passa na máquina de quem
+    tem `.env` apontando para um cluster e falha no CI, que é exatamente o
+    inverso do que um teste unitário deve fazer."""
+
+    def find_one(self, filtro):
+        nome = filtro["keyAltNames"]
+        return {"_id": Binary(nome.encode()[:16].ljust(16, b"\0"), 4)}
+
+    def count_documents(self, _filtro, **_kw):
+        return len(encryption.CAMPOS_CIFRADOS)
+
+
+@pytest.fixture(autouse=True)
+def cofre_stubado(monkeypatch):
+    monkeypatch.setattr(encryption, "key_vault_collection", CofreFalso)
+    encryption.limpar_cache_deks()
+    yield
+    encryption.limpar_cache_deks()
 
 
 def _campos():
