@@ -1,6 +1,6 @@
 # Atlas Queryable Encryption — MongoDB
 
-> Segundo dos três prompts. A coleção, o `encryptedFields`, o cofre de chaves, o seed e a limpeza. Arquitetura e armadilhas gerais em `01-arquitetura.md`; tela e roteiro em `03-interface-fluxos.md`.
+> Segunda parte do briefing. A coleção, o `encryptedFields`, o cofre de chaves, o seed e a limpeza. Arquitetura e armadilhas gerais em `01-arquitetura.md`; tela e roteiro em `03-interface-fluxos.md`.
 
 ---
 

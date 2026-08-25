@@ -27,3 +27,8 @@ backend/data/demo_seeds.json
 
 # Grafo de código gerado pelo graphify — reproduzível, nunca editado à mão.
 graphify-out/
+
+# Instruções locais de ferramenta — não versionar
+CLAUDE.md
+AGENTS.md
+.claude/

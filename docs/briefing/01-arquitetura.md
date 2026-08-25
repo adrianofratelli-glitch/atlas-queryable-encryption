@@ -1,6 +1,6 @@
 # Atlas Queryable Encryption — arquitetura e princípios
 
-> Primeiro dos três prompts que eu uso pra levantar essa PoV do zero. O argumento único, os dois clientes MongoDB, a segurança do backend e a operação. Coleção, `encryptedFields` e cofre em `02-mongodb.md`; tela e roteiro em `03-interface-fluxos.md`.
+> Primeira das três partes do briefing desta PoV. O argumento único, os dois clientes MongoDB, a segurança do backend e a operação. Coleção, `encryptedFields` e cofre em `02-mongodb.md`; tela e roteiro em `03-interface-fluxos.md`.
 
 ---
 

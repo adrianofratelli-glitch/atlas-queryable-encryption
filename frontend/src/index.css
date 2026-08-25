@@ -128,6 +128,14 @@ h3 { font-size: 14px; font-weight: 600; }
   background: var(--bg-card); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md); padding: 20px; margin-top: 20px;
 }
+.card--secondary { padding: 0; overflow: hidden; }
+.card--secondary > summary {
+  min-height: 52px; display: flex; align-items: center; cursor: pointer;
+  padding: 0 20px; color: var(--text-sec); font-weight: 600;
+}
+.card--secondary > summary::marker { color: var(--accent); }
+.card--secondary[open] > summary { border-bottom: 1px solid var(--border-subtle); }
+.secondary-content { padding: 20px; }
 .grade { display: grid; gap: 16px; }
 .grade--2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .grade--3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }

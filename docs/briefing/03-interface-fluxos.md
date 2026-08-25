@@ -1,8 +1,16 @@
 # Atlas Queryable Encryption — interface e fluxos
 
-> Terceiro dos três prompts. A tela, os componentes, o que a UI nunca faz e o roteiro da demo. Arquitetura em `01-arquitetura.md`; coleção, cofre e seed em `02-mongodb.md`.
+> Terceira parte do briefing. A tela, os componentes, o que a UI nunca faz e o roteiro da demo. Arquitetura em `01-arquitetura.md`; coleção, cofre e seed em `02-mongodb.md`.
 
 ---
+## Estado atual — modo palco
+
+A tela principal mostra apenas a tese, a busca escolhida e a comparação entre a
+visão da aplicação e a visão sem chave. Randomização e provas complementares
+continuam reais, mas ficam recolhidas em **Provas adicionais**. Esta seção é a
+fonte canônica para a hierarquia atual; os detalhes abaixo documentam o fluxo e
+os contratos de evidência.
+
 ## Contrato visual do portfólio (v2)
 
 Esta UI participa da assinatura MongoDB Dark das PoVs. O arquivo

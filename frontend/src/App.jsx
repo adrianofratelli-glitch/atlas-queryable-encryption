@@ -107,7 +107,8 @@ export default function App() {
   }, [apiExemplos.call])
 
   return (
-    <div className="app app--simples">
+    <div className="app app--simples" data-pov-shell>
+      <a className="pov-skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
       <header className="topo">
         <div className="topo__marca">
           <svg aria-hidden="true" width="26" height="26" viewBox="0 0 256 549" fill="none">
@@ -121,12 +122,9 @@ export default function App() {
         <SeloPreflight />
       </header>
 
-      <main className="conteudo conteudo--simples">
+      <main id="conteudo-principal" tabIndex={-1} className="conteudo conteudo--simples">
         <p className="tese">
-          Os dois painéis abaixo são <strong>dois clientes contra o mesmo cluster, no mesmo
-          instante</strong>. À esquerda a sua aplicação, com auto-encryption. À direita quem tem
-          credencial de leitura no banco: o DBA, o time de infraestrutura, o provedor de nuvem e
-          quem levar o backup.
+          <strong>Mesma coleção, duas leituras.</strong> A aplicação tem a chave; o DBA não.
         </p>
 
         <div className="card">
@@ -195,13 +193,11 @@ export default function App() {
           )}
         </div>
 
-        <div className="card">
-          <h2>Por que isso não é o que você já tem</h2>
-          <p className="tese">
-            Cifrar não é o difícil — <strong>continuar consultando é</strong>. Todo o resto do
-            mercado escolhe um dos dois.
-          </p>
-          <table style={{ marginTop: 14 }}>
+        <details className="card card--secondary">
+          <summary>Provas adicionais</summary>
+          <div className="secondary-content">
+          <h2>Alternativas</h2>
+          <table>
             <tbody>
               {ALTERNATIVAS.map(([nome, texto, veredito]) => (
                 <tr key={nome} className={veredito === 'sim' ? 'linha--destaque' : undefined}>
@@ -217,12 +213,8 @@ export default function App() {
             </tbody>
           </table>
 
-          <h3 style={{ marginTop: 22 }}>A prova de que é randomizado</h3>
-          <p className="tese">
-            Dois titulares diferentes com o <strong>mesmo CPF</strong>. Se os ciphertexts fossem
-            iguais, quem tem o dump contaria repetições e reidentificaria — é exatamente o que
-            CSFLE determinístico entrega.
-          </p>
+          <h3 style={{ marginTop: 22 }}>Ciphertext randomizado</h3>
+          <p className="tese">Mesmo CPF, dois ciphertexts distintos.</p>
           <button className="acao" disabled={apiPar.loading}
             onClick={() => apiPar.call('/demo/par-repetido').then(setPar)}>
             {apiPar.loading ? 'lendo…' : 'Mostrar o par'}
@@ -248,7 +240,8 @@ export default function App() {
               </div>
             </>
           )}
-        </div>
+          </div>
+        </details>
 
         <p className="legenda" style={{ textAlign: 'center', margin: '8px 0 32px' }}>
           Dado sintético. Os CPF têm dígito verificador válido e prefixo <code>999</code>, uma
