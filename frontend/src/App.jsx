@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useApi } from './hooks/useApi'
 import Documento from './components/Documento'
 import Bloco from './components/Bloco'
+import QueryDetails from './components/QueryDetails'
 
 /**
  * A PoV inteira em uma tela. Um argumento só: o servidor executa a busca sem
@@ -189,6 +190,12 @@ export default function App() {
                   dados={resultado.dba} />
               </div>
               <Bloco dados={resultado.filtro} rotulo="Ver o filtro que saiu daqui" />
+              <QueryDetails
+                operation={resultado.query_details?.operation}
+                namespace={resultado.query_details?.namespace}
+                query={resultado.query_details?.command}
+                explain={resultado.query_details?.explain}
+              />
             </>
           )}
         </div>

@@ -81,6 +81,21 @@ def _executar(filtro: dict, limite: int) -> dict:
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
 
     return {
+        "query_details": {
+            "operation": "find",
+            "namespace": f"{settings.mongo_db}.{COLECAO_CIFRADA}",
+            "command": {
+                "find": COLECAO_CIFRADA,
+                "filter": serializar(filtro),
+                "projection": projecao,
+                "limit": limite,
+            },
+            "clients": ["MongoClient + AutoEncryptionOpts", "MongoClient comum"],
+            "explain": {
+                "mode": "not_auto_executed",
+                "reason": "o painel não repete a consulta com executionStats; use o comando exibido em ambiente controlado",
+            },
+        },
         "aplicacao": {
             "encontrados": len(cifrados),
             "ms": ms_app,
