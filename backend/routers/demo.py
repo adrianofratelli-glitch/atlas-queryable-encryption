@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from bson import ObjectId
@@ -37,6 +38,13 @@ router = APIRouter(prefix="/demo", tags=["demo"])
 
 SEEDS = Path(__file__).resolve().parent.parent / "data" / "demo_seeds.json"
 LIMITE_MAX = 10
+
+# As duas buscas de `_executar` vão para clientes MongoClient distintos (cada
+# um com seu próprio pool de conexões e, no caso do cifrado, seu próprio
+# contexto de auto-encryption) — PyMongo é thread-safe para uso concorrente
+# entre threads, então rodar as duas em paralelo é seguro e corta a latência
+# pela metade. O pool é só para isso; 2 workers bastam por request.
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="qe-demo-busca")
 
 
 def _colecao(cliente):
@@ -64,19 +72,27 @@ def _executar(filtro: dict, limite: int) -> dict:
 
     Os dois lados rodam mesmo quando o de baixo vai voltar vazio: o zero do
     cliente comum é a evidência, não uma falha a ser escondida.
+
+    As duas buscas saem em paralelo (ThreadPoolExecutor) em vez de sequenciais:
+    o driver é síncrono, mas os dois clientes são objetos MongoClient distintos
+    e thread-safe, então esperar um terminar para começar o outro só dobra a
+    latência por request sem necessidade nenhuma.
     """
     projecao = {"observacoes": 0}
+    futuro_cifrado = _executor.submit(
+        _cronometrar, lambda: list(_colecao(cliente_cifrado()).find(filtro, projecao).limit(limite))
+    )
+    futuro_claro = _executor.submit(
+        _cronometrar, lambda: list(_colecao(cliente_claro()).find(filtro, projecao).limit(limite))
+    )
+
     try:
-        cifrados, ms_app = _cronometrar(
-            lambda: list(_colecao(cliente_cifrado()).find(filtro, projecao).limit(limite))
-        )
+        cifrados, ms_app = futuro_cifrado.result()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
 
     try:
-        claros, ms_dba = _cronometrar(
-            lambda: list(_colecao(cliente_claro()).find(filtro, projecao).limit(limite))
-        )
+        claros, ms_dba = futuro_claro.result()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
 
@@ -265,7 +281,17 @@ def preflight_checks() -> dict:
     try:
         total = key_vault_collection().estimated_document_count()
     except Exception as exc:
-        return {"cofre": {"ok": False, "message": f"cofre inacessível: {type(exc).__name__}"}}
+        # erro_do_servidor() carrega code/codeName do MongoDB quando existem —
+        # diferencia "cluster fora do ar" de "sem permissão" no selo, em vez
+        # de só o nome genérico da exceção.
+        detalhe = erro_do_servidor(exc)
+        codigo = f" (code={detalhe['codigo']})" if "codigo" in detalhe else ""
+        return {
+            "cofre": {
+                "ok": False,
+                "message": f"cofre inacessível: {detalhe['tipo']}{codigo}: {detalhe['mensagem']}",
+            }
+        }
     return {
         "cofre": {
             "ok": total > 0,

@@ -1,5 +1,7 @@
 import logging
 import re
+import threading
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -97,8 +99,35 @@ def health_ready():
     return JSONResponse(status_code=200 if ok else 503, content={"ready": ok, "message": message})
 
 
+_PREFLIGHT_CACHE_TTL_S = 8.0
+_preflight_cache_lock = threading.Lock()
+_preflight_cache: dict | None = None
+_preflight_cache_ts: float = 0.0
+
+
 @app.get("/preflight")
 def preflight():
+    # O frontend chama /preflight a cada montagem de <SeloPreflight /> (comum em
+    # StrictMode e em refresh rápido durante demo), e cada chamada roda buildInfo,
+    # list_collection_names e contagens no keyVault — comandos admin baratos
+    # isoladamente, mas sem motivo para repetir a cada re-render. TTL curto: cache
+    # "morno" o suficiente para não martelar o cluster, curto o suficiente para o
+    # selo continuar refletindo o estado real da demo em segundos.
+    global _preflight_cache, _preflight_cache_ts
+    with _preflight_cache_lock:
+        agora = time.monotonic()
+        if _preflight_cache is not None and (agora - _preflight_cache_ts) < _PREFLIGHT_CACHE_TTL_S:
+            return _preflight_cache
+
+    resposta = _preflight_sem_cache()
+
+    with _preflight_cache_lock:
+        _preflight_cache = resposta
+        _preflight_cache_ts = time.monotonic()
+    return resposta
+
+
+def _preflight_sem_cache():
     mongo_ok, mongo_message = readiness()
     checks = {
         "mongo_uri": {"ok": bool(settings.mongo_uri), "message": "configurada" if settings.mongo_uri else "ausente"},

@@ -15,6 +15,7 @@ CMK; material completo se investiga no mongosh, não pela API.
 from __future__ import annotations
 
 import base64
+import logging
 import threading
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from pymongo import MongoClient
 from pymongo.encryption import ClientEncryption
 from pymongo.encryption_options import AutoEncryptionOpts
 
+from routers._comum import erro_do_servidor
 from settings import settings
 
 APP_NAME = "atlas-queryable-encryption"
@@ -41,6 +43,8 @@ CAMPOS_CIFRADOS = ("cpf", "email", "salario", "score_credito", "observacoes")
 CAMPOS_CLAROS = ("nome", "cidade", "uf", "tenant_id", "faixa_salarial", "cadastro_em")
 
 COLECOES_CIFRADAS = (COLECAO_CIFRADA,)
+
+logger = logging.getLogger("qe.encryption")
 
 
 def nome_dek(colecao: str, campo: str) -> str:
@@ -120,6 +124,17 @@ def dek_id(nome: str):
             raise RuntimeError(
                 f"Cofre vazio: a DEK '{nome}' não existe. Rode scripts/criar-cofre.py."
             )
+        # Cofre não vazio mas ESTA DEK específica sumiu: pode ser shredding
+        # intencional, mas também pode ser índice corrompido, replicação
+        # parcial ou nome de DEK digitado errado após deploy. Silenciar os
+        # dois casos do mesmo jeito escondia o segundo — loga um warning para
+        # dar pista de correlação sem impedir o boot.
+        logger.warning(
+            "DEK ausente no cofre (nome=%s) com cofre não vazio — tratando como "
+            "crypto shredding esperado; se não foi intencional, verifique o "
+            "keyAltName e a saúde da replicação do keyVault.",
+            nome,
+        )
         return Binary(_UUID_AUSENTE, UUID_SUBTYPE)
     _deks_cache[nome] = documento["_id"]
     return documento["_id"]
@@ -333,8 +348,13 @@ def readiness() -> tuple[bool, str]:
     try:
         cliente_claro().admin.command("ping")
         return True, "MongoDB conectado"
-    except Exception as exc:  # detalhes só nos logs do backend
-        return False, f"MongoDB indisponível: {type(exc).__name__}"
+    except Exception as exc:  # detalhes completos só nos logs do backend
+        # erro_do_servidor() extrai code/codeName do MongoDB quando existem —
+        # é a diferença entre "cluster fora do ar", "sem permissão" e "IP fora
+        # da allowlist" no selo, em vez de só o nome genérico da exceção.
+        detalhe = erro_do_servidor(exc)
+        codigo = f" (code={detalhe['codigo']})" if "codigo" in detalhe else ""
+        return False, f"MongoDB indisponível: {detalhe['tipo']}{codigo}: {detalhe['mensagem']}"
 
 
 def versao_servidor() -> tuple[int, int, str]:
