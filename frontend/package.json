@@ -2,7 +2,7 @@
   "name": "frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "Frontend da PoV Atlas Queryable Encryption",
+  "description": "Frontend for the MongoDB Atlas Queryable Encryption PoV",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
