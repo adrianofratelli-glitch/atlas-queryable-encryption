@@ -1,52 +1,56 @@
-# Consulta sobre dado que o servidor não consegue ler
+# Query data the server cannot read
 
-Quem no seu time consegue ler o CPF dos seus clientes hoje? Na maioria das arquiteturas a
-resposta é: o DBA, o time de infraestrutura, quem tem acesso ao backup e o provedor de nuvem.
-Criptografia em repouso e em trânsito não muda isso — nos dois casos o banco decifra para
-poder trabalhar.
+Who can read customer identifiers in a conventional data platform? Frequently,
+the answer includes database administrators, infrastructure teams, backup
+operators, and the cloud provider. Encryption at rest and in transit does not
+change that boundary: the database still decrypts the value to process it.
 
-**MongoDB Queryable Encryption** cifra o campo com a chave do cliente e ainda assim o filtra,
-por igualdade e por faixa, sem que o servidor veja plaintext em momento nenhum: nem em repouso,
-nem em trânsito, nem em uso, nem no log, nem no backup.
+**MongoDB Queryable Encryption** encrypts a field with a customer-controlled key
+while preserving equality and range queries. The server never sees plaintext at
+rest, in transit, in use, in logs, or in backups.
 
-## A demo
+The PoV interface remains in Brazilian Portuguese; the engineering documentation
+is in English.
 
-Uma tela. Você escolhe um titular da base — ou digita outro CPF — e o mesmo filtro sai ao mesmo
-tempo por **dois clientes contra a mesma coleção**: a sua aplicação, com auto-encryption, e um
-cliente comum, com as mesmas credenciais de banco que o DBA já tem hoje.
+## The PoV
 
-A aplicação acha o documento e lê o CPF. O cliente comum recebe `Binary(subtype 6)` e, ao
-filtrar pelo mesmo valor, **acha zero**.
+One screen sends the same filter through **two clients against the same
+collection**: an application client with automatic encryption and a regular
+client representing the database administrator's view.
 
-![A busca por CPF nos dois clientes](docs/screenshots/demo.png)
+The encrypted application client finds the document and reads the identifier.
+The regular client receives `Binary(subtype 6)` and finds **zero documents** when
+filtering by the same plaintext value.
 
-Há três botões, e cada um responde a uma objeção:
+![Side-by-side identifier search through encrypted and regular clients](docs/screenshots/demo.png)
 
-| Botão | O que prova |
+Three actions address the core objections:
+
+| Action | What it proves |
 |---|---|
-| **Buscar por igualdade** | filtro por campo cifrado funciona — sem ciphertext determinístico |
-| **Buscar por faixa** | `$gte`/`$lte` sobre campo cifrado, o que ninguém espera que funcione (GA no 8.0) |
-| **Buscar por UF** | o controle do experimento: campo em claro, os dois lados acham o mesmo |
+| **Equality query** | A filter over an encrypted field works without deterministic ciphertext |
+| **Range query** | `$gte`/`$lte` work over an encrypted field; range queries are GA in MongoDB 8.0 |
+| **State query** | The experimental control: both clients find the same plaintext field |
 
-E o botão **Mostrar o par** exibe dois titulares diferentes com o **mesmo CPF** produzindo
-ciphertexts distintos. É o que separa Queryable Encryption do resto: se fossem iguais, quem
-tem o dump contaria repetições e reidentificaria.
+The **Show pair** action displays two different customers with the same
+identifier and different ciphertexts. That distinction matters: identical
+ciphertexts would let anyone holding a dump count repetitions and infer identity.
 
-## Por que não é o que você já tem
+## How it differs from familiar controls
 
-| | |
+| Approach | Security and query behavior |
 |---|---|
-| TDE, disco cifrado | cifra em repouso; quem tem credencial de leitura vê tudo em claro |
-| CSFLE determinístico | permite igualdade porque o mesmo valor vira o mesmo ciphertext — e é isso que vaza frequência |
-| `pgcrypto`, cifrar na aplicação | protege o valor, mas o banco deixa de conseguir filtrar por ele |
-| **Queryable Encryption** | **ciphertext randomizado e consultável: igualdade e faixa, com a chave fora do servidor** |
+| TDE or encrypted disks | Protect data at rest; users with read credentials still see plaintext |
+| Deterministic CSFLE | Enables equality because equal values produce equal ciphertext, which leaks frequency |
+| `pgcrypto` or application encryption | Protects the value but removes the database's ability to filter it |
+| **Queryable Encryption** | **Randomized, queryable ciphertext for equality and range, with keys outside the server** |
 
-## Requisitos
+## Requirements
 
-- **MongoDB 7.0+**, no Atlas **M10 ou superior**. Não roda em Flex nem no tier gratuito.
-  Consulta por faixa é GA a partir do **8.0**.
-- Python 3.11+, Node 20+.
-- Um provedor de KMS: arquivo local (demo) ou AWS KMS (produção).
+- MongoDB 7.0+ on Atlas M10 or above. Flex and free tiers are not supported.
+  Range queries are generally available starting in MongoDB 8.0.
+- Python 3.11+ and Node.js 20+.
+- A KMS provider: local key file for the demo or AWS KMS for production.
 
 ## Setup
 
@@ -55,70 +59,70 @@ tem o dump contaria repetições e reidentificaria.
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env        # preencha MONGO_URI
+cp .env.example .env        # set MONGO_URI
 cd ..
 
-# Chave mestra e biblioteca de criptografia
-python scripts/gerar-master-key.py     # 96 bytes em backend/secrets/, modo 0600
-./scripts/instalar-crypt-shared.sh     # biblioteca → backend/lib/
+# Master key and crypt_shared library
+python scripts/gerar-master-key.py     # 96 bytes in backend/secrets/, mode 0600
+./scripts/instalar-crypt-shared.sh     # library → backend/lib/
 
-# Cofre e dados
-python scripts/criar-cofre.py          # índice do keyVault + as DEKs da demo
-python backend/seed_data.py            # 5.000 titulares na coleção cifrada
+# Key vault and data
+python scripts/criar-cofre.py          # key-vault index and demo DEKs
+python backend/seed_data.py            # 5,000 encrypted synthetic customers
 
 # Frontend
 cd frontend && npm install && cd ..
 ```
 
-## Executar
+## Run it
 
 ```bash
 ./start.sh --foreground     # backend :8300 + frontend :5300
 curl http://localhost:8300/preflight
 ```
 
-O preflight checa `MONGO_URI`, alcance do cluster, versão do servidor, presença da
-`crypt_shared`, o cofre, a coleção e o modo da guarda de mutação. Ele existe porque, sem
-ele, um cluster em versão errada falha com "comando desconhecido" — uma mensagem que não
-menciona criptografia em lugar nenhum.
+The preflight checks `MONGO_URI`, cluster reachability, server version,
+`crypt_shared`, the key vault, the collection, and the mutation-guard mode. This
+prevents an incompatible server version from surfacing only as an unrelated
+"unknown command" error.
 
-## Como funciona
+## How it works
 
-```
+```text
 React (frontend/, :5300) ──fetch──> FastAPI (backend/, :8300)
                                         │
-                                        ├── MongoClient CIFRADO (AutoEncryptionOpts) ──> Atlas
-                                        ├── MongoClient CLARO  (a "visão do DBA")    ──> Atlas
-                                        └── KMS local ou AWS KMS
+                                        ├── ENCRYPTED MongoClient (AutoEncryptionOpts) ──> Atlas
+                                        ├── REGULAR MongoClient (the DBA view)          ──> Atlas
+                                        └── Local KMS or AWS KMS
 ```
 
-**Os dois clientes de `backend/encryption.py` são a PoV inteira**, não um detalhe de
-implementação: o painel dividido da tela é literalmente os dois lado a lado.
+The two clients in `backend/encryption.py` are the experiment, not an
+implementation detail: the split UI renders their results side by side.
 
-**Há uma coleção só.** `clientes` é a cifrada, e os dois painéis leem ela — o que muda entre
-eles é o cliente, não o destino da query. As `enxcol_.*` ao lado são os metadados que o próprio
-servidor mantém para conseguir casar a busca; ele as usa sem conseguir interpretá-las.
+There is only one business collection. Both panels read `clientes`; only the
+client changes. The adjacent `enxcol_.*` collections contain server-maintained
+metadata that supports matching without revealing the values.
 
-O driver cifra o valor da busca com a mesma DEK e envia o ciphertext. Nenhum plaintext atravessa
-a rede.
+The driver encrypts the query value with the same DEK and sends ciphertext.
+Plaintext never crosses the network.
 
-## Testes
+## Tests
 
 ```bash
-pytest                        # nenhum precisa de cluster, de crypt_shared ou de KMS
+pytest                 # no cluster, crypt_shared, or KMS required
 ruff check backend scripts
 ```
 
-## Segurança
+## Security boundaries
 
-- A chave mestra local **não fica no `.env`**: fica em `backend/secrets/`, com modo 0600, fora
-  do controle de versão. KMS local é para demonstração — em produção use AWS KMS, Azure Key
-  Vault, GCP KMS ou KMIP.
-- Nenhum endpoint devolve chave mestra, DEK decifrada ou `keyMaterial` completo.
-- **Nunca aponte esta PoV para nada além de um cluster de demonstração descartável.**
-- O dataset é sintético. Os CPF têm dígito verificador válido e prefixo `999`, uma faixa não
-  emitida: eles não pertencem a ninguém.
+- The local master key is stored under `backend/secrets/` with mode `0600`, not
+  in `.env`, and is excluded from version control. Local KMS is for demonstration;
+  production deployments should use AWS KMS, Azure Key Vault, GCP KMS, or KMIP.
+- No endpoint returns the master key, a decrypted DEK, or complete `keyMaterial`.
+- Never point this PoV at anything other than a disposable demonstration cluster.
+- The dataset is synthetic. Identifiers have valid check digits and use the
+  non-issued `999` prefix; they do not belong to real people.
 
-## Licença
+## License
 
 MIT.
