@@ -9,8 +9,8 @@ change that boundary: the database still decrypts the value to process it.
 while preserving equality and range queries. The server never sees plaintext at
 rest, in transit, in use, in logs, or in backups.
 
-The PoV interface remains in Brazilian Portuguese; the engineering documentation
-is in English.
+This public overview is in English; the PoV interface and presentation-specific
+documentation remain in Brazilian Portuguese.
 
 ## The PoV
 
