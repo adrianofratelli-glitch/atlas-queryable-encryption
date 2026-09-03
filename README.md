@@ -1,5 +1,7 @@
 # Query data the server cannot read
 
+[![CI](https://github.com/adrianofratelli-glitch/atlas-queryable-encryption/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianofratelli-glitch/atlas-queryable-encryption/actions/workflows/ci.yml)
+
 Who can read customer identifiers in a conventional data platform? Frequently,
 the answer includes database administrators, infrastructure teams, backup
 operators, and the cloud provider. Encryption at rest and in transit does not
@@ -112,6 +114,10 @@ Plaintext never crosses the network.
 pytest                 # no cluster, crypt_shared, or KMS required
 ruff check backend scripts
 ```
+
+Every pull request runs the backend test suite, Ruff, and a dependency audit,
+plus a clean frontend production build and npm audit. The suite uses MongoDB
+stubs and requires no Atlas cluster, `crypt_shared` library, or KMS provider.
 
 ## Security boundaries
 
