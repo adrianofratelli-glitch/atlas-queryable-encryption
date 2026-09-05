@@ -69,11 +69,9 @@ async def validation_error(_request: Request, exc: RequestValidationError):
 @app.exception_handler(Exception)
 async def unexpected_error(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "unknown")
-    # exc_info vai para o log; a resposta carrega só o request_id. Nesta PoV isso
-    # deixa de ser higiene e vira requisito: um traceback com o documento dentro
-    # imprimiria plaintext de campo cifrado, que é exatamente o vazamento que o
-    # cliente está pagando para evitar.
-    logger.exception("Falha não tratada request_id=%s", request_id, exc_info=exc)
+    # Driver/validation exceptions can embed documents in their message. Keep
+    # correlation and exception type without logging plaintext or chained errors.
+    logger.error("Falha não tratada request_id=%s type=%s", request_id, type(exc).__name__)
     return JSONResponse(
         status_code=500,
         content={"detail": "Falha interna na demonstração.", "request_id": request_id},
