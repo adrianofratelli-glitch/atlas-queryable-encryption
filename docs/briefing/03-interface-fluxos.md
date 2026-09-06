@@ -124,3 +124,8 @@ A linha do MongoDB é a **conclusão**, não mais um item — ela é destacada v
 - **"E o direito ao esquecimento?"** — apagar a DEK torna o campo matematicamente irrecuperável, **inclusive nos backups já feitos**. O registro continua existindo e contabilizável. LGPD art. 18 sem conflito com a retenção do Bacen. Mas a granularidade não é livre: a chave é por campo de uma coleção, nunca por documento. **"Uma DEK por titular" não existe** nessa modelagem — não prometa isso.
 - **"Quanto custa?"** — cite o overhead **por documento e por campo**, com o tier ao lado, nunca o múltiplo sozinho. Num M20 com 100.000 titulares deu ~9,5 kB por documento, ~1,9 kB por campo. O múltiplo parecia 63× só porque o documento em claro era pequeno.
 - **"A latência não fica ruim?"** — a cifragem acontece **na aplicação**, então depende do hardware de quem apresenta. E cuidado: se o notebook estiver saindo por VPN, o RTT domina tudo e vira "custo da criptografia" na cabeça de quem assiste. Meça a linha de base da rede antes de atribuir qualquer número ao produto.
+
+
+## Comportamento de resiliência integrado
+
+Recuperar pré-voo e titulares após falha; distinguir lista vazia de erro; mensagem correta para busca sem resultado; ignorar chamadas já canceladas. A implementação vigente está em `main`; consulte o estado atual de `../../REVIEW.md` para validação e propostas não aplicadas.
