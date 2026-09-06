@@ -46,9 +46,10 @@ function ErroToast() {
 
 /** Um preflight vermelho no palco tem que aparecer antes de alguém clicar. */
 function SeloPreflight() {
-  const { call } = useApi()
+  const { call, error } = useApi()
   const [estado, setEstado] = useState(null)
   useEffect(() => { call('/preflight').then(setEstado) }, [call])
+  if (!estado && error) return <button className="acao acao--secundario" onClick={() => call('/preflight').then(setEstado)}>Revalidar conexão</button>
   if (!estado) return <span className="selo">verificando…</span>
   const reprovados = Object.entries(estado.checks || {}).filter(([, c]) => !c.ok)
   if (estado.ready) return <span className="selo selo--ok">✓ pré-voo ok</span>
@@ -69,7 +70,7 @@ function Painel({ titulo, sub, dados, destaque }) {
         {dados.encontrados} documento(s) · {dados.ms} ms
       </p>
       {dados.encontrados === 0
-        ? <span className="selo selo--ok">zero — o valor em claro não casa com nada</span>
+        ? <span className="selo">{destaque ? 'Nenhum titular encontrado para este filtro.' : 'Nenhum documento retornado por este filtro no cliente sem chave.'}</span>
         : dados.documentos.map(doc => <Documento key={doc._id} doc={doc} />)}
     </div>
   )
@@ -97,15 +98,16 @@ export default function App() {
 
   // Ninguém decora um CPF. Sem esta lista, a demo começa com alguém digitando
   // um número que não existe e recebendo zero — pelo motivo errado.
-  useEffect(() => {
-    apiExemplos.call('/demo/exemplos').then(dados => {
+  const carregarTitulares = () => {
+    return apiExemplos.call('/demo/exemplos').then(dados => {
       const lista = dados?.titulares || []
       setTitulares(lista)
       // Só preenche o que ainda está vazio: uma segunda resposta chegando
       // depois não pode trocar o titular que já está selecionado na tela.
       setCpf(atual => atual || lista[0]?.cpf || '')
     })
-  }, [apiExemplos.call])
+  }
+  useEffect(() => { carregarTitulares() }, [apiExemplos.call])
 
   return (
     <div className="app app--simples" data-pov-shell>
@@ -141,7 +143,9 @@ export default function App() {
                 <span>{formatarCpf(t.cpf)} · {t.uf} · {brl(t.salario)}</span>
               </button>
             ))}
-            {!titulares.length && <span className="legenda">carregando titulares…</span>}
+            {!titulares.length && (apiExemplos.loading
+              ? <span className="legenda">carregando titulares…</span>
+              : <span className="legenda" role="status">{apiExemplos.error ? 'Não foi possível carregar os titulares.' : 'Nenhum titular disponível.'} <button className="acao acao--secundario" onClick={carregarTitulares}>Recarregar titulares</button></span>)}
           </div>
 
           <div className="campos" style={{ marginTop: 14 }}>

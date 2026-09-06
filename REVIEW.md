@@ -55,3 +55,13 @@ Esta seção atualiza o estado dos achados históricos acima.
 - pip-audit atual: pytest 8.4.2: PYSEC-2026-1845
 - Ambiente: pip 26.2.1 nos ambientes que possuem pip; FinScope mantém uv sem pip. Essa atualização local não altera arquivos de dependências das PoVs.
 - `_shared`: nenhum importador estático comprovado nesta PoV; apenas smoke consome o helper no inventário.
+
+
+## Homologação de resiliência e UI
+
+- Melhoria: Recuperar pré-voo e titulares após falha; distinguir lista vazia de erro; mensagem correta para busca sem resultado; ignorar chamadas já canceladas.
+- Isolamento: `review/codex-homologation`, baseada no HEAD `d76a5d9`. Mudança de estado observável; aguardando aprovação individual, sem merge.
+- Validação: build passou; UI offline em 1440×1000, 768×1024 e 360×800 sem pageerror nem overflow horizontal; skip link transfere foco. 0 testes novos de transporte/polling neste repositório. As suítes locais anteriores foram reexecutadas; resultados consolidados no vault PoVs-Handoffs.
+- Limite: teste offline/fixture não certifica cenário real completo nem ausência de bugs. Não houve alteração de schema, dataset ou dependência core.
+- Propostas preservadas: pytest 8.4.2 → 9.0.3: elimina advisory de diretório temporário, mas é salto major de ferramenta de testes; propor atualização dedicada com plugins/CI validados. KMS, encryptedFields, dois clientes e seed preservados. Logs históricos não foram auditados.
+- `_shared` e daemon do portal não foram alterados nesta rodada.
