@@ -43,3 +43,15 @@ Auditoria do ambiente instalado, não de uma resolução limpa do manifesto; fer
 Varredura por padrões de chaves privadas, chaves Anthropic/AWS e URI MongoDB autenticada no histórico Git local alcançável: nenhuma credencial real confirmada; matches encontrados eram placeholders conhecidos. Limite: não é scanner de entropia, não cobre objetos inacessíveis, texto em screenshots nem logs externos.
 
 Nenhum import/referência estática a `_shared/grove_client.py` foi encontrado nesta PoV. Configuração própria de gateway/ambiente não constitui dependência de código desse módulo. `_shared` permaneceu intocado; consumidores externos/dinâmicos não são garantidos por busca estática. Relatório separado: `../REVIEW_SHARED.md`.
+
+
+## Fechamento final — 2026-09-05
+
+Esta seção atualiza o estado dos achados históricos acima.
+
+- Aplicado/reavaliado: Sem alteração nova de runtime; saneamento de logs anterior mantido.
+- Validação: 38 testes; npm sem achados.
+- Propostas e limites restantes: pytest 8.4.2 → 9.0.3: elimina advisory de diretório temporário, mas é salto major de ferramenta de testes; propor atualização dedicada com plugins/CI validados. KMS, encryptedFields, dois clientes e seed preservados. Logs históricos não foram auditados.
+- pip-audit atual: pytest 8.4.2: PYSEC-2026-1845
+- Ambiente: pip 26.2.1 nos ambientes que possuem pip; FinScope mantém uv sem pip. Essa atualização local não altera arquivos de dependências das PoVs.
+- `_shared`: nenhum importador estático comprovado nesta PoV; apenas smoke consome o helper no inventário.
