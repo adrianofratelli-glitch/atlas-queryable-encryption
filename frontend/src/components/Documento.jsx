@@ -8,14 +8,30 @@ import Cifra from './Cifra'
  */
 export const ORDEM = ['_id', 'nome', 'cpf', 'email', 'salario', 'score_credito', 'uf', 'cidade', 'faixa_salarial', 'tenant_id']
 
-export default function Documento({ doc, campos = ORDEM }) {
+/** Marca onde o trecho buscado casou dentro do valor decifrado. */
+function Destacado({ texto, trecho, modo }) {
+  const t = String(texto)
+  const i = modo === 'prefixo' ? (t.startsWith(trecho) ? 0 : -1)
+    : modo === 'sufixo' ? (t.endsWith(trecho) ? t.length - trecho.length : -1)
+    : t.indexOf(trecho)
+  if (i < 0) return <span className="linha__valor">{t}</span>
+  return (
+    <span className="linha__valor">
+      {t.slice(0, i)}<mark className="casou">{t.slice(i, i + trecho.length)}</mark>{t.slice(i + trecho.length)}
+    </span>
+  )
+}
+
+export default function Documento({ doc, campos = ORDEM, destaque }) {
   if (!doc) return null
   return (
     <div className="doc">
       {campos.filter(campo => doc[campo] !== undefined).map(campo => (
         <div className="linha" key={campo}>
           <span className="linha__rotulo">{campo}</span>
-          <Cifra valor={doc[campo]} />
+          {destaque && destaque.campo === campo && typeof doc[campo] === 'string'
+            ? <Destacado texto={doc[campo]} trecho={destaque.trecho} modo={destaque.modo} />
+            : <Cifra valor={doc[campo]} />}
         </div>
       ))}
     </div>

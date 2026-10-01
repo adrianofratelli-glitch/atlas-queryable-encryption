@@ -97,6 +97,20 @@ def _executar(filtro: dict, limite: int) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
 
+    # O zero do cliente comum prova que o servidor não casa o filtro sem a chave;
+    # não prova que o documento está escondido. O DBA continua lendo o disco: os
+    # mesmos documentos que a aplicação achou, por `_id`, vêm como Binary(6).
+    # A tela mostra as duas coisas, separadas e rotuladas.
+    ids_app = [doc["_id"] for doc in cifrados]
+    if claros or not ids_app:
+        lidos, origem = claros, "filtro"
+    else:
+        try:
+            lidos = list(_colecao(cliente_claro()).find({"_id": {"$in": ids_app}}, projecao))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
+        origem = "por_id"
+
     return {
         "query_details": {
             "operation": "find",
@@ -119,9 +133,13 @@ def _executar(filtro: dict, limite: int) -> dict:
             "documentos": [serializar(doc) for doc in cifrados],
         },
         "dba": {
+            # Quantos o MESMO filtro achou sem a chave.
             "encontrados": len(claros),
             "ms": ms_dba,
-            "documentos": [serializar(doc) for doc in claros],
+            # De onde vêm `documentos`: "filtro" (o próprio filtro achou) ou
+            # "por_id" (o filtro achou zero; leitura direta dos mesmos _id).
+            "origem": origem,
+            "documentos": [serializar(doc) for doc in lidos],
         },
     }
 
@@ -215,10 +233,16 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
     return {
         "tipo": item["label"], "campo": item["campo"],
+        "operador": item["operador"], "modo": tipo, "valor": item["valor"],
+        "limite": LIMITE_MAX,
         "filtro": serializar(filtro),
         "aplicacao": {"encontrados": len(encontrados), "documentos": [serializar(d) for d in encontrados]},
         "dba": {"encontrados": len(claros), "documentos": [serializar(d) for d in claros]},
-        "leitura": "A aplicação encontra por texto parcial e decifra localmente; o DBA lê os mesmos registros como BinData cifrado.",
+        "leitura": (
+            f"O servidor casou \"{item['valor']}\" contra o campo {item['campo']} sem decifrá-lo; "
+            "a aplicação decifra o resultado localmente. O DBA não consegue montar essa busca "
+            "e lê os mesmos registros, por _id, como BinData cifrado."
+        ),
     }
 
 

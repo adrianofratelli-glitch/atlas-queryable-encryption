@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- UI: três cards independentes (igualdade, faixa/UF, texto parcial); o painel do DBA mostra o zero do filtro e a leitura por `_id` como `Binary(subtype 6)`; busca por string exibe o campo buscado e destaca o trecho casado.
+- API: `/demo/buscar` devolve `dba.origem`; `/demo/buscar-string` devolve `campo`, `valor`, `modo` e `limite`.
 - UI: layout MongoDB 2026 "Dark Stage v4" (tokens mais escuros, Special Gothic / Source Code Pro locais, motivos de escada e grade, movimento escalonado).
 
 ## 1.0.0 (2026-09-30)

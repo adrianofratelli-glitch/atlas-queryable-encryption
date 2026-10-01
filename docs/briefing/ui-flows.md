@@ -68,7 +68,7 @@ Um `Binary(subtype 6)` tem 17 bytes de cabeçalho (tipo + UUID da DEK) que são 
 1. Usuário seleciona um chip de titular e clica "Buscar por igualdade". A tela não pede CPF digitado.
 2. `apiBusca.call('/demo/buscar?cpf=...')` → `GET /demo/buscar`.
 3. Painel esquerdo ("SUA APLICAÇÃO"): 1 documento, CPF legível.
-4. Painel direito ("O DBA · O BACKUP · A NUVEM"): 0 documentos, mensagem "Nenhum documento retornado por este filtro no cliente sem chave."
+4. Painel direito ("O DBA · O BACKUP · A NUVEM"): mostra duas evidências separadas. (a) O mesmo filtro sem a chave devolve 0 — o servidor não casa valor em claro com ciphertext. (b) Lendo direto por `_id` os mesmos documentos que a aplicação achou (`dba.origem == "por_id"`), o DBA vê `cpf` e `salario` como `Binary(subtype 6)`. O zero prova que a busca exige a chave; a leitura por `_id` prova que o disco não vaza o dado.
 5. `<Bloco/>` e `<QueryDetails/>` recolhidos abaixo, para quem quiser ver o filtro/comando cru.
 
 ### Fluxo 3 — busca por faixa (salário)
@@ -81,7 +81,7 @@ Filtro em campo **em claro**. Os dois painéis devolvem a mesma contagem — é 
 
 ### Fluxo 5 — busca parcial sobre e-mail cifrado
 
-Três botões apresentam exemplos fixos (prefixo `titular0`, sufixo `@exemplo.invalid`, trecho `ular0@`). Não há campo para digitar nem memorizar valor. A aplicação consulta um dos campos QE de string e mostra os documentos decifrados; o painel DBA busca os mesmos documentos por `_id` e mostra os bytes cifrados. MongoDB 9.0+ e PyMongo 4.18+ são necessários.
+A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial), cada um com estado e resultado próprios; um resultado nunca aparece no meio de outro bloco. Três botões apresentam exemplos fixos (prefixo `titular0`, sufixo `@exemplo.invalid`, trecho `ular0@`). Não há campo para digitar nem memorizar valor. A aplicação consulta um dos campos QE de string e mostra os documentos decifrados, com o campo buscado (`email_prefix`/`email_suffix`/`email_substring`) visível e o trecho casado marcado em verde (`mark.casou`); o painel DBA busca os mesmos documentos por `_id` e mostra os bytes cifrados. MongoDB 9.0+ e PyMongo 4.18+ são necessários.
 
 ### Fluxo 6 — "Provas adicionais" (seção recolhida)
 

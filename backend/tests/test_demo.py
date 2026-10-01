@@ -71,7 +71,8 @@ def test_os_dois_clientes_recebem_o_mesmo_filtro(colecoes, cliente):
     transformariam a evidência em coincidência."""
     cifrada, clara = colecoes
     cliente.get("/demo/buscar", params={"salario_min": 8000, "salario_max": 15000})
-    assert cifrada.filtros == clara.filtros
+    # A segunda consulta do cliente claro é a leitura por _id, não o filtro.
+    assert cifrada.filtros[0] == clara.filtros[0]
 
 
 def test_faixa_vira_gte_lte(colecoes, cliente):
@@ -163,3 +164,45 @@ def test_exemplos_exclui_o_par_plantado_da_consulta(monkeypatch, cliente, tmp_pa
     cliente.get("/demo/exemplos")
     assert "_id" in colecao.filtros[0]
     assert len(colecao.filtros[0]["_id"]["$nin"]) == 2
+
+
+def test_dba_filtro_zero_mas_leitura_por_id_mostra_os_mesmos_documentos(colecoes, cliente):
+    """O zero do cliente comum e o que o DBA lê no disco são duas evidências."""
+    cifrada, clara = colecoes
+    # O cliente claro responde zero ao filtro, mas devolve o documento por _id.
+    original = clara.find
+
+    def find(filtro, projecao=None):
+        original(filtro, projecao)
+        clara.documentos = [{"_id": "1", "cpf": "bin"}] if "_id" in filtro else []
+        return clara
+
+    clara.find = find
+    r = cliente.get("/demo/buscar", params={"cpf": "999.437.501-62"}).json()
+    assert r["aplicacao"]["encontrados"] == 1
+    assert r["dba"]["encontrados"] == 0
+    assert r["dba"]["origem"] == "por_id"
+    assert [d["_id"] for d in r["dba"]["documentos"]] == ["1"]
+    assert clara.filtros[-1] == {"_id": {"$in": ["1"]}}
+
+
+def test_dba_sem_resultado_da_aplicacao_nao_le_nada_por_id(colecoes, cliente):
+    cifrada, clara = colecoes
+    cifrada.documentos = []
+    r = cliente.get("/demo/buscar", params={"cpf": "999.437.501-62"}).json()
+    assert r["dba"]["documentos"] == [] and r["dba"]["origem"] == "filtro"
+    assert len(clara.filtros) == 1
+
+
+def test_busca_string_informa_valor_e_campo(monkeypatch, colecoes, cliente):
+    class Cli:
+        def server_info(self):
+            return {"versionArray": [9, 0, 3, 0]}
+
+    cifrada, clara = colecoes
+    cifrada.documentos = [{"_id": "1", "nome": "N", "email_prefix": "titular0@exemplo.invalid"}]
+    monkeypatch.setattr(demo, "cliente_claro", lambda: type("C", (Cli,), {
+        "find": lambda self, f, p=None: clara.find(f, p)})())
+    r = cliente.get("/demo/buscar-string", params={"tipo": "prefixo"}).json()
+    assert r["valor"] == "titular0" and r["campo"] == "email_prefix"
+    assert r["modo"] == "prefixo" and r["aplicacao"]["documentos"][0]["email_prefix"].startswith("titular0")

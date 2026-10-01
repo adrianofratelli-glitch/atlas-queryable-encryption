@@ -246,3 +246,6 @@ td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Trecho do valor decifrado que casou com a busca parcial. */
+.casou { background: rgba(0, 237, 100, 0.22); color: #00ED64; border-radius: 3px; padding: 0 2px; font-weight: 600; }

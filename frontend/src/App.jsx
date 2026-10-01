@@ -60,19 +60,56 @@ function SeloPreflight() {
   )
 }
 
-function Painel({ titulo, sub, dados, destaque }) {
+function Painel({ titulo, sub, dados, destaque, campos, marca, aviso }) {
   if (!dados) return null
+  const porId = !destaque && dados.origem === 'por_id'
   return (
     <div className={destaque ? 'painel painel--app' : 'painel painel--dba'}>
       <div className="painel__titulo">{titulo}</div>
       <div className="painel__origem">{sub}</div>
       <p className="legenda" style={{ margin: '0 0 12px' }}>
-        {dados.encontrados} documento(s) · {dados.ms} ms
+        {destaque || dados.ms === undefined
+          ? `${dados.encontrados} documento(s)${dados.ms !== undefined ? ` · ${dados.ms} ms` : ''}`
+          : `o mesmo filtro, sem a chave: ${dados.encontrados} documento(s) · ${dados.ms} ms`}
       </p>
-      {dados.encontrados === 0
+      {aviso && <p className="legenda" style={{ margin: '0 0 12px' }}>{aviso}</p>}
+      {porId && (
+        <p className="legenda" style={{ margin: '0 0 12px' }}>
+          Sem a chave o filtro não casa. Mas o disco é legível: lendo direto por <code>_id</code>,
+          os mesmos documentos aparecem assim:
+        </p>
+      )}
+      {dados.documentos.length === 0
         ? <span className="selo">{destaque ? 'Nenhum titular encontrado para este filtro.' : 'Nenhum documento retornado por este filtro no cliente sem chave.'}</span>
-        : dados.documentos.map(doc => <Documento key={doc._id} doc={doc} />)}
+        : dados.documentos.map(doc => <Documento key={doc._id} doc={doc} campos={campos} destaque={marca} />)}
     </div>
+  )
+}
+
+/** Um bloco de resultado: aviso, painéis lado a lado e o filtro executado. */
+function Resultado({ resultado }) {
+  if (!resultado) return null
+  const campos = ['_id', 'nome', 'cpf', 'salario', 'uf']
+  return (
+    <>
+      <div className="aviso" style={{ marginTop: 16 }}>
+        <span>ℹ️</span>
+        <span><strong>{resultado.tipo}</strong> — {resultado.leitura}</span>
+      </div>
+      <div className="painel-duplo">
+        <Painel titulo="SUA APLICAÇÃO" sub="MongoClient + AutoEncryptionOpts"
+          dados={resultado.aplicacao} destaque campos={campos} />
+        <Painel titulo="O DBA · O BACKUP · A NUVEM" sub="MongoClient comum, mesma URI"
+          dados={resultado.dba} campos={campos} />
+      </div>
+      <Bloco dados={resultado.filtro} rotulo="Ver o filtro que saiu daqui" />
+      <QueryDetails
+        operation={resultado.query_details?.operation}
+        namespace={resultado.query_details?.namespace}
+        query={resultado.query_details?.command}
+        explain={resultado.query_details?.explain}
+      />
+    </>
   )
 }
 
@@ -85,15 +122,20 @@ const ALTERNATIVAS = [
 
 export default function App() {
   const apiBusca = useApi()
+  const apiFaixa = useApi()
+  const apiTexto = useApi()
   const apiPar = useApi()
   const apiExemplos = useApi()
   const [titulares, setTitulares] = useState([])
   const [cpf, setCpf] = useState('')
   const [resultado, setResultado] = useState(null)
+  const [resultadoFaixa, setResultadoFaixa] = useState(null)
   const [par, setPar] = useState(null)
   const [buscaString, setBuscaString] = useState(null)
 
-  const buscar = (params) => apiBusca.call(`/demo/buscar?${new URLSearchParams(params)}`).then(setResultado)
+  const buscar = (params) => apiBusca.call(`/demo/buscar?${new URLSearchParams(params)}`).then(r => r && setResultado(r))
+  const buscarFaixa = (params) => apiFaixa.call(`/demo/buscar?${new URLSearchParams(params)}`).then(r => r && setResultadoFaixa(r))
+  const buscarTexto = (tipo) => apiTexto.call(`/demo/buscar-string?tipo=${tipo}`).then(r => r && setBuscaString(r))
 
   // Ninguém decora um CPF. Sem esta lista, a demo começa com alguém digitando
   // um número que não existe e recebendo zero — pelo motivo errado.
@@ -130,6 +172,7 @@ export default function App() {
         </p>
 
         <div className="card">
+          <h3 style={{ marginTop: 0 }}>1 · Igualdade sobre CPF cifrado</h3>
           <p className="legenda" style={{ margin: '0 0 8px' }}>
             Titulares na base — selecione um exemplo para buscar:
           </p>
@@ -146,81 +189,71 @@ export default function App() {
               ? <span className="legenda">carregando titulares…</span>
               : <span className="legenda" role="status">{apiExemplos.error ? 'Não foi possível carregar os titulares.' : 'Nenhum titular disponível.'} <button className="acao acao--secundario" onClick={carregarTitulares}>Recarregar titulares</button></span>)}
           </div>
-
           <div className="campos" style={{ marginTop: 14 }}>
             <button className="acao" disabled={apiBusca.loading || !cpf}
               onClick={() => buscar({ cpf })}>
               Buscar por igualdade
             </button>
           </div>
+          {apiBusca.loading && <p className="legenda" style={{ marginTop: 14 }}>consultando os dois clientes…</p>}
+          <Resultado resultado={resultado} />
+        </div>
 
-          <div className="card card--secondary" style={{ marginTop: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Buscar e-mail cifrado por trecho</h3>
-            <p className="legenda">Escolha um exemplo pronto. O texto de busca já vem definido.</p>
-            <div className="chips" role="group" aria-label="Tipo de busca parcial">
-              {[
-                ['prefixo', 'Começa com', 'titular0'],
-                ['sufixo', 'Termina com', '@exemplo.invalid'],
-                ['trecho', 'Contém', 'ular0@'],
-              ].map(([tipo, label, exemplo]) => (
-                <button key={tipo} className={buscaString?.tipo === label ? 'chip chip--ativo' : 'chip'}
-                  disabled={apiBusca.loading}
-                  onClick={() => apiBusca.call(`/demo/buscar-string?tipo=${tipo}`).then(setBuscaString)}>
-                  <strong>{label}</strong><span>{exemplo}</span>
-                </button>
-              ))}
-            </div>
-            {buscaString && <>
-              <div className="aviso" style={{ marginTop: 12 }}><span>ℹ️</span><span><strong>{buscaString.tipo}</strong> — {buscaString.leitura}</span></div>
-              <div className="painel-duplo">
-                <Painel titulo="SUA APLICAÇÃO" sub="Query string cifrada pelo driver; resultado decifrado no cliente" dados={buscaString.aplicacao} destaque />
-                <Painel titulo="O DBA · O BACKUP · A NUVEM" sub="Os mesmos registros, sem acesso à DEK" dados={buscaString.dba} />
-              </div>
-              <Bloco dados={buscaString.filtro} rotulo="Ver a expressão executada" />
-            </>}
-          </div>
-
-          <div className="campos" style={{ marginTop: 14 }}>
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>2 · Faixa de salário cifrado, e o controle em claro</h3>
+          <div className="campos">
             {[
               ['5–15 mil', 5000, 15000],
               ['15–25 mil', 15000, 25000],
               ['25–40 mil', 25000, 40000],
             ].map(([label, salario_min, salario_max]) => (
-              <button key={label} className="acao" disabled={apiBusca.loading}
-                onClick={() => buscar({ salario_min, salario_max })}>
+              <button key={label} className="acao" disabled={apiFaixa.loading}
+                onClick={() => buscarFaixa({ salario_min, salario_max })}>
                 Faixa: {label}
               </button>
             ))}
-            <button className="acao acao--secundario" disabled={apiBusca.loading}
-              onClick={() => buscar({ uf: 'SP' })}
+            <button className="acao acao--secundario" disabled={apiFaixa.loading}
+              onClick={() => buscarFaixa({ uf: 'SP' })}
               title="Campo em claro: o controle do experimento">
               Buscar por UF (campo em claro)
             </button>
           </div>
+          {apiFaixa.loading && <p className="legenda" style={{ marginTop: 14 }}>consultando os dois clientes…</p>}
+          <Resultado resultado={resultadoFaixa} />
+        </div>
 
-          {apiBusca.loading && <p className="legenda" style={{ marginTop: 14 }}>consultando os dois clientes…</p>}
-
-          {resultado && (
-            <>
-              <div className="aviso" style={{ marginTop: 16 }}>
-                <span>ℹ️</span>
-                <span><strong>{resultado.tipo}</strong> — {resultado.leitura}</span>
-              </div>
-              <div className="painel-duplo">
-                <Painel titulo="SUA APLICAÇÃO" sub="MongoClient + AutoEncryptionOpts"
-                  dados={resultado.aplicacao} destaque />
-                <Painel titulo="O DBA · O BACKUP · A NUVEM" sub="MongoClient comum, mesma URI"
-                  dados={resultado.dba} />
-              </div>
-              <Bloco dados={resultado.filtro} rotulo="Ver o filtro que saiu daqui" />
-              <QueryDetails
-                operation={resultado.query_details?.operation}
-                namespace={resultado.query_details?.namespace}
-                query={resultado.query_details?.command}
-                explain={resultado.query_details?.explain}
-              />
-            </>
-          )}
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>3 · Texto parcial no e-mail cifrado</h3>
+          <p className="legenda">
+            Escolha um exemplo pronto. O servidor casa o trecho contra o e-mail sem decifrá-lo;
+            o trecho que casou aparece marcado no resultado da aplicação.
+          </p>
+          <div className="chips" role="group" aria-label="Tipo de busca parcial">
+            {[
+              ['prefixo', 'Começa com', 'titular0'],
+              ['sufixo', 'Termina com', '@exemplo.invalid'],
+              ['trecho', 'Contém', 'ular0@'],
+            ].map(([tipo, label, exemplo]) => (
+              <button key={tipo} className={buscaString?.modo === tipo ? 'chip chip--ativo' : 'chip'}
+                disabled={apiTexto.loading} onClick={() => buscarTexto(tipo)}>
+                <strong>{label}</strong><span>{exemplo}</span>
+              </button>
+            ))}
+          </div>
+          {apiTexto.loading && <p className="legenda" style={{ marginTop: 14 }}>consultando os dois clientes…</p>}
+          {buscaString && <>
+            <div className="aviso" style={{ marginTop: 12 }}><span>ℹ️</span><span><strong>{buscaString.tipo}</strong> — {buscaString.leitura}</span></div>
+            <div className="painel-duplo">
+              <Painel titulo="SUA APLICAÇÃO" sub="Trecho cifrado pelo driver; resultado decifrado no cliente"
+                dados={buscaString.aplicacao} destaque campos={['_id', 'nome', buscaString.campo]}
+                marca={{ campo: buscaString.campo, trecho: buscaString.valor, modo: buscaString.modo }}
+                aviso={buscaString.aplicacao.encontrados >= buscaString.limite ? `Exibindo os primeiros ${buscaString.limite}.` : undefined} />
+              <Painel titulo="O DBA · O BACKUP · A NUVEM" sub="Os mesmos registros por _id, sem acesso à DEK"
+                dados={buscaString.dba} campos={['_id', 'nome', buscaString.campo]}
+                aviso="Não há como montar esta busca sem a chave: o servidor só casa o trecho com o ciphertext que o driver gera." />
+            </div>
+            <Bloco dados={buscaString.filtro} rotulo="Ver a expressão executada" />
+          </>}
         </div>
 
         <details className="card card--secondary">
