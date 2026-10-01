@@ -3,28 +3,28 @@
    paleta desta PoV é o âmbar, e ele é semântico, não decorativo: ciphertext e
    avisos de KMS local. Verde continua sendo sinal de valor comprovado.        */
 :root {
-  --bg-primary:   #001E2B;
-  --bg-secondary: #112733;
-  --bg-card:      #1C2D38;
+  --bg-primary:   #061621;
+  --bg-secondary: #001e2b;
+  --bg-card:      #0a2633;
   --bg-subtle:    rgba(255,255,255,0.04);
-  --border-subtle:#3D4F58;
+  --border-subtle:#2a424d;
 
-  --text-pri:   #E8EDEB;
-  --text-sec:   #C1C7C6;
-  --text-muted: #889397;
+  --text-pri:   #fdfff5;
+  --text-sec:   #cdd5ce;
+  --text-muted: #9ea2a1;
 
   --accent:  #00ED64;
-  --link:    #0498EC;
-  --warning: #FFC010;
+  --link:    #3d9dff;
+  --warning: #ffad00;
   --danger:  #FF6960;
 
   /* Acento de domínio: ciphertext. */
-  --cifrado: #FFC010;
+  --cifrado: #ffad00;
   --cifrado-bg: rgba(255,192,16,0.10);
   --cifrado-borda: rgba(255,192,16,0.32);
 
-  --font: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font: 'Special Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Source Code Pro', 'Source Code Pro', monospace;
 
   --radius-sm: 6px;
   --radius-md: 12px;
@@ -144,7 +144,7 @@ h3 { font-size: 14px; font-weight: 600; }
 button.acao {
   font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer;
   padding: 9px 16px; border-radius: var(--radius-sm);
-  background: var(--accent); color: #001E2B; border: 1px solid transparent;
+  background: var(--accent); color: #061621; border: 1px solid transparent;
   transition: filter 180ms;
 }
 button.acao:hover:not(:disabled) { filter: brightness(1.08); }
