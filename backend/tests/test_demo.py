@@ -112,7 +112,7 @@ def test_par_ausente_falha_em_vez_de_afirmar_o_contrario(monkeypatch, cliente, t
     exatamente o oposto do que a PoV existe para provar."""
     seeds = tmp_path / "demo_seeds.json"
     seeds.write_text('{"cpf_repetido": ["6a88642d52a60188aa9827fb", "6a88642d52a60188aa9827fc"]}')
-    monkeypatch.setattr(demo, "SEEDS", seeds)
+    monkeypatch.setattr(demo, "ler_arquivo_seeds", lambda: seeds)
     vazia = ColecaoFalsa([])
     monkeypatch.setattr(demo, "_colecao", lambda _cliente: vazia)
     monkeypatch.setattr(demo, "cliente_cifrado", lambda: vazia)
@@ -156,7 +156,7 @@ def test_exemplos_exclui_o_par_plantado_da_consulta(monkeypatch, cliente, tmp_pa
     Parece defeito, e é a primeira impressão que o cliente tem."""
     seeds = tmp_path / "demo_seeds.json"
     seeds.write_text('{"cpf_repetido": ["6a88642d52a60188aa9827fb", "6a88642d52a60188aa9827fc"]}')
-    monkeypatch.setattr(demo, "SEEDS", seeds)
+    monkeypatch.setattr(demo, "ler_arquivo_seeds", lambda: seeds)
     colecao = ColecaoFalsa([{"_id": "9", "nome": "T", "cpf": "99911122233", "salario": 1, "uf": "SP"}])
     monkeypatch.setattr(demo, "_colecao", lambda _c: colecao)
     monkeypatch.setattr(demo, "cliente_cifrado", lambda: colecao)

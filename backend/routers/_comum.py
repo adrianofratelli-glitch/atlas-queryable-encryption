@@ -8,6 +8,7 @@ módulo 06 — e nunca um texto ilustrativo.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 
 from bson import Binary, ObjectId
@@ -57,10 +58,27 @@ def serializar(valor):
     return valor
 
 
+# O texto do driver é útil no palco ("Encrypted fields cannot be indexed",
+# "Value must be within range"), mas vem com bagagem: `full error: {...}` com
+# $clusterTime e assinatura, e erros de rede listam o hostname de cada nó do
+# cluster. A mensagem continua sendo a do servidor; só a bagagem sai.
+_FULL_ERROR = re.compile(r",? full error: .*$", re.DOTALL)
+_HOST = re.compile(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.mongodb(?:-dev)?\.net(?::\d+)?")
+_URI = re.compile(r"mongodb(?:\+srv)?://\S+")
+LIMITE_MENSAGEM = 400
+
+
+def mensagem_segura(texto: str) -> str:
+    texto = _FULL_ERROR.sub("", texto)
+    texto = _URI.sub("<uri>", texto)
+    texto = _HOST.sub("<host-atlas>", texto)
+    return texto if len(texto) <= LIMITE_MENSAGEM else texto[:LIMITE_MENSAGEM] + "…"
+
+
 def erro_do_servidor(exc: Exception) -> dict:
-    """A mensagem crua do MongoDB. O módulo 04 depende de ela não ser traduzida:
-    o valor da tela está em o erro vir do servidor, não de um texto nosso."""
-    detalhe = {"tipo": type(exc).__name__, "mensagem": str(exc)}
+    """A mensagem do MongoDB, sem tradução e sem bagagem. O módulo 04 depende de
+    ela não ser traduzida: o valor da tela está em o erro vir do servidor."""
+    detalhe = {"tipo": type(exc).__name__, "mensagem": mensagem_segura(str(exc))}
     codigo = getattr(exc, "code", None)
     if codigo is not None:
         detalhe["codigo"] = codigo

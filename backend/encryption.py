@@ -19,8 +19,9 @@ import logging
 import threading
 from pathlib import Path
 
+import bson
 from bson.binary import UUID_SUBTYPE, Binary
-from pymongo import MongoClient
+from pymongo import MongoClient, monitoring
 from pymongo.encryption import ClientEncryption
 from pymongo.encryption_options import AutoEncryptionOpts
 
@@ -226,6 +227,73 @@ def descricao_kms() -> dict:
     }
 
 
+# ── O comando que de fato sai pela rede ──────────────────────────────────────
+# O listener vê o comando DEPOIS da auto-encryption: é o que o servidor recebe.
+# A tela mostra esse comando, e não o filtro que a aplicação montou, porque é ele
+# que prova a tese — o valor buscado chega ao servidor como Binary(subtype 6).
+# A captura é por thread: o PyMongo síncrono publica o evento na thread que
+# executa a operação, então duas requisições simultâneas não se misturam.
+_captura = threading.local()
+
+
+class CapturaDeComando(monitoring.CommandListener):
+    def started(self, event):
+        alvo = getattr(_captura, "alvo", None)
+        if alvo is None or event.command_name != alvo[0]:
+            return
+        if event.command.get(event.command_name) != alvo[1]:
+            return  # find interno do driver no cofre de chaves, não a busca da tela
+        # Depois da auto-encryption o filtro vem como RawBSONDocument; o
+        # round-trip por BSON devolve dicts comuns com os Binary(subtype 6).
+        _captura.comando = bson.decode(bson.encode(event.command))
+
+    def succeeded(self, event):
+        pass
+
+    def failed(self, event):
+        pass
+
+
+_ouvinte = CapturaDeComando()
+
+
+def executar_capturando(nome: str, colecao: str, fn):
+    """Roda `fn()` e devolve (resultado, comando `nome` sobre `colecao` como saiu)."""
+    _captura.alvo, _captura.comando = (nome, colecao), None
+    try:
+        return fn(), getattr(_captura, "comando", None)
+    finally:
+        _captura.alvo, _captura.comando = None, None
+
+
+# Campos que o driver acrescenta e que não ajudam a ler a prova. `encryptionInformation`
+# carrega o schema (paths, keyId UUID, contention) — nada de material de chave —, mas
+# tem centenas de linhas e esconderia o filtro.
+_CAMPOS_DE_PROTOCOLO = {"lsid", "$clusterTime", "$db", "txnNumber", "signature",
+                        "$readPreference", "encryptionInformation"}
+
+
+def resumir_comando_enviado(comando: dict | None):
+    """Comando de rede seguro para exibir: ciphertext vira rótulo com tamanho."""
+    if comando is None:
+        return None
+
+    def resumir(valor):
+        if isinstance(valor, Binary):
+            if valor.subtype == 6:
+                return f"<Binary subtype 6 · {len(valor)} B · ciphertext>"
+            return f"<Binary subtype {valor.subtype} · {len(valor)} B>"
+        if isinstance(valor, dict):
+            return {chave: resumir(item) for chave, item in valor.items()}
+        if isinstance(valor, (list, tuple)):
+            return [resumir(item) for item in valor]
+        if isinstance(valor, (int, float, str, bool)) or valor is None:
+            return valor
+        return str(valor)
+
+    return {chave: resumir(valor) for chave, valor in comando.items() if chave not in _CAMPOS_DE_PROTOCOLO}
+
+
 # ── Clientes ─────────────────────────────────────────────────────────────────
 _lock = threading.Lock()
 _cliente_claro: MongoClient | None = None
@@ -292,6 +360,7 @@ def cliente_cifrado() -> MongoClient:
                 appname=f"{APP_NAME}-cifrado",
                 connect=False,
                 auto_encryption_opts=opcoes,
+                event_listeners=[_ouvinte],
                 **_timeouts(),
             )
         return _cliente_cifrado
