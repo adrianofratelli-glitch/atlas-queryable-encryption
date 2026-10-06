@@ -26,6 +26,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("qe.api")
 
 
+class SemQueryStringNoAccessLog(logging.Filter):
+    """O access log do uvicorn grava a URL inteira: `GET /demo/buscar?cpf=999…`.
+
+    Numa PoV que argumenta que o CPF nunca aparece em claro fora da aplicação,
+    o CPF em claro no log do backend é o primeiro lugar que um arquiteto cético
+    vai olhar. O caminho fica; a query string vira `?<omitida>`.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) and "?" in args[2]:
+            record.args = (*args[:2], args[2].split("?", 1)[0] + "?<omitida>", *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(SemQueryStringNoAccessLog())
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
@@ -34,7 +52,7 @@ async def lifespan(_app: FastAPI):
         fechar_clientes()
 
 
-app = FastAPI(title="Atlas Queryable Encryption", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Atlas Queryable Encryption", version="1.1.0", lifespan=lifespan)
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 app.add_middleware(ApiHardeningMiddleware)
