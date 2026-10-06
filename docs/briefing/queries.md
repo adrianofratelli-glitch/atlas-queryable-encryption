@@ -55,7 +55,7 @@ colecao.find(filtro, {"_id": 1, "nome": 1, "cpf": 1, "salario": 1, "uf": 1}) \
 
 **Onde:** `backend/routers/demo.py:227-272`.
 
-**O que faz:** busca por `_id` (usando os IDs plantados no seed, persistidos em `backend/data/demo_seeds.json`) nos dois clientes, e compara os ciphertexts hex dos dois documentos.
+**O que faz:** busca por `_id` (usando os IDs plantados no seed, persistidos em `backend/data/demo_seeds.<QE_DB>.json` — um arquivo por banco, para o seed do banco `_test` não sobrescrever o par da demo; o nome antigo `demo_seeds.json` ainda é lido para o banco da demo) nos dois clientes, e compara os ciphertexts hex dos dois documentos.
 
 ```python
 colecao.find({"_id": {"$in": [id1, id2]}}, {"observacoes": 0})

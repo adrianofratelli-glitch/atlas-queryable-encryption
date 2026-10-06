@@ -68,6 +68,22 @@ O dev server do Vite proxia `/api` para `http://localhost:8300`, removendo o pre
 | `backend/seed_data.py` | gerador determinístico de dados sintéticos, grava pelo cliente cifrado |
 | `scripts/criar-cofre.py` | cria o índice único do keyVault + as DEKs para todos os campos cifrados |
 | `scripts/gerar-master-key.py`, `scripts/instalar-crypt-shared.sh`, `scripts/limpar-cofre.py` | setup e limpeza de ambiente |
+| `scripts/reset_demo.py` | reset único: limpa coleções e `enxcol_.*` (e o cofre, com `--recriar-chaves`), garante índice do keyVault e DEKs, recria a coleção com `encryptedFields`, semeia, cria índices e **verifica** (contagem, par plantado, `Binary(subtype 6)` em todo campo cifrado lido sem chave, igualdade cifrada) |
+| `scripts/bench_qe.py` | overhead medido de QE contra a mesma massa em claro indexada (igualdade, faixa, insert, storage) e prova de rede; só roda em banco `*_test` e apaga o que cria |
+
+### Guarda do banco da demo
+
+`settings.exigir_permissao_de_escrita()` é chamada por `seed_data.py`, `criar-cofre.py`, `limpar-cofre.py` e `reset_demo.py`. Se `QE_DB` **ou** o banco de `QE_KEY_VAULT_NS` não terminar em `_test`, o script recusa sem `ALLOW_DEMO_DB_WRITE=1`. O banco de teste usa o próprio cofre (`<QE_DB>_test.__keyVault`): um cofre de teste apontando para o cofre da demo também é recusado. Os metadados do seed (`backend/data/demo_seeds.<QE_DB>.json`) são por banco, para o seed de teste não trocar o par plantado da demo.
+
+### O comando que chega ao servidor
+
+O cliente cifrado é criado com um `CommandListener` (`encryption.py:CapturaDeComando`). O PyMongo publica o `CommandStartedEvent` **depois** da auto-encryption, então o listener vê exatamente o que vai pela rede. `executar_capturando()` arma a captura por thread (`threading.local`), só para o `find` sobre `clientes` — os `find` internos do driver no cofre são ignorados — e `resumir_comando_enviado()` troca cada `Binary(subtype 6)` por `<Binary subtype 6 · N B · ciphertext>` e remove `lsid`, `$clusterTime`, `$db` e `encryptionInformation` (schema com `keyId`, sem material de chave). É o que o drawer "Ver query / comando que chegou ao servidor" mostra.
+
+### Erros e logs sem plaintext
+
+- Entrada inválida vira `422` antes de tocar no banco; falha do driver vira `502` com a mensagem do servidor passada por `mensagem_segura()` (`routers/_comum.py`): sem `full error`, sem URI, sem hostname `*.mongodb.net`, até 400 caracteres.
+- O access log do uvicorn gravaria `GET /demo/buscar?cpf=999…`; o filtro `SemQueryStringNoAccessLog` (`main.py`) troca a query string por `?<omitida>`.
+- O handler global de exceção loga só `request_id` e o tipo da exceção.
 
 ### Os dois clientes MongoDB — o coração da PoV
 

@@ -59,6 +59,31 @@ The **Show pair** action displays two different customers with the same
 identifier and different ciphertexts. That distinction matters: identical
 ciphertexts would let anyone holding a dump count repetitions and infer identity.
 
+## Measured cost
+
+`scripts/bench_qe.py` compares the encrypted collection with an **indexed**
+plaintext copy of the same 5,000 synthetic customers, through the same cluster
+and network, and drops the copy afterwards. It refuses anything but a `_test`
+database. Two runs on 2026-10-06 against Atlas MongoDB 9.0.3, from a laptop with
+a ~207 ms `ping` p50 to the cluster (100 queries per type, 30 single inserts):
+
+| Operation | QE p50 / p95 (ms) | Plaintext p50 / p95 (ms) | Run 1 p50 ratio | Run 2 p50 ratio |
+|---|---|---|---|---|
+| Equality on `cpf` | 206.2 / 399.7 | 207.4 / 223.7 | 0.81× | 0.99× |
+| Range on `salario` | 403.8 / 471.6 | 210.6 / 271.2 | 1.71× | 1.92× |
+| Single insert | 461.4 / 1011.8 | 212.8 / 228.0 | 2.09× | 2.17× |
+
+Absolute values are from run 2. On this link an equality query costs one round
+trip either way; range and insert cost about two. Storage is the real price:
+`clientes` plus `enxcol_.*` used 441 MB (data + indexes) against 2.6 MB for the
+plaintext copy, about 170×, driven by the eight encrypted fields and above all
+by the substring field (`strMaxLength` 40). Size each queryable field
+deliberately; `observacoes` is encrypted but not queryable and pays no metadata.
+
+The same run captures the `find` sent by the encrypted client and checks its
+BSON: the searched CPF bytes are absent, and the filter holds a
+`Binary(subtype 6)`.
+
 ## How it differs from familiar controls
 
 | Approach | Security and query behavior |
@@ -80,24 +105,48 @@ ciphertexts would let anyone holding a dump count repetitions and infer identity
 ## Setup
 
 ```bash
-# Backend
+# Backend — the only virtualenv this repo uses is backend/venv
 cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements-dev.txt
-cp .env.example .env        # set MONGO_URI
+python3 -m venv venv
+venv/bin/pip install -r requirements-dev.txt
+cp .env.example .env        # set MONGO_URI and QE_DB
 cd ..
 
 # Master key and crypt_shared library
-python scripts/gerar-master-key.py     # 96 bytes in backend/secrets/, mode 0600
-./scripts/instalar-crypt-shared.sh     # library → backend/lib/
+backend/venv/bin/python scripts/gerar-master-key.py   # 96 bytes in backend/secrets/, mode 0600
+./scripts/instalar-crypt-shared.sh                    # library → backend/lib/
 
-# Key vault and data
-python scripts/criar-cofre.py          # key-vault index and demo DEKs
-python backend/seed_data.py            # 5,000 encrypted synthetic customers
+# Key vault, DEKs, encrypted collection, data and indexes — one command
+ALLOW_DEMO_DB_WRITE=1 backend/venv/bin/python scripts/reset_demo.py   # ~3–10 min, see below
 
 # Frontend
 cd frontend && npm install && cd ..
 ```
+
+## Reset and the demo-database guard
+
+`scripts/reset_demo.py` is the single reset: it drops `clientes` and its
+`enxcol_.*` metadata, ensures the key-vault unique index and every DEK (creating
+only the missing ones; `--recriar-chaves` shreds the vault and creates new ones),
+recreates the collection with `encryptedFields`, writes 5,000 synthetic
+customers through the encrypted client, creates the plaintext-field indexes and
+then **verifies** the result (document count, planted pair, `Binary(subtype 6)`
+on every encrypted field read without the key, one encrypted equality match).
+Stop the backend before `--recriar-chaves`; it caches each field's `keyId`.
+
+Every script that writes (`reset_demo.py`, `seed_data.py`, `criar-cofre.py`,
+`limpar-cofre.py`) runs freely when both `QE_DB` and the database of
+`QE_KEY_VAULT_NS` end in `_test`, and refuses the demo database unless
+`ALLOW_DEMO_DB_WRITE=1` is exported. Use a `_test` database with its own key
+vault for experiments:
+
+```bash
+QE_DB=<db>_test QE_KEY_VAULT_NS=<db>_test.__keyVault backend/venv/bin/python scripts/reset_demo.py
+```
+
+Seed metadata (the planted pair `_id`s) lives in
+`backend/data/demo_seeds.<QE_DB>.json`, one file per database, so a test reset
+never invalidates the demo's pair.
 
 ## Run it
 
@@ -136,14 +185,42 @@ client changes. The adjacent `enxcol_.*` collections contain server-maintained
 metadata that supports matching without revealing the values.
 
 The driver encrypts the query value with the same DEK and sends ciphertext.
-Plaintext never crosses the network.
+Plaintext never crosses the network. The **Ver query / comando que chegou ao
+servidor** drawer shows that command as the server received it, captured by a
+PyMongo `CommandListener` after auto-encryption: the searched CPF or salary
+bounds appear as `<Binary subtype 6 · N B · ciphertext>`.
+
+The DBA panel is the honest counterpart: the regular client sends the value the
+"DBA" typed in plaintext — without the DEK it cannot encrypt it — and matches
+nothing. That plaintext reaches the server because the DBA sent it, never
+because the application did.
 
 ## Tests
 
 ```bash
-pytest                 # no cluster, crypt_shared, or KMS required
-ruff check backend scripts
+backend/venv/bin/python -m pytest      # no cluster, crypt_shared, or KMS required
+backend/venv/bin/ruff check backend scripts
 ```
+
+`backend/tests/test_adversarial.py` covers hostile input (non-ASCII digits,
+zero-width characters, operators in the query string, inverted ranges, oversized
+values), sanitized driver errors, the access-log filter and the thread-local
+wire capture. `backend/tests/test_live_adversarial.py` runs against a real
+cluster, only on a reset `_test` database:
+
+```bash
+QE_LIVE=1 QE_DB=<db>_test QE_KEY_VAULT_NS=<db>_test.__keyVault \
+  backend/venv/bin/python -m pytest backend/tests/test_live_adversarial.py
+```
+
+It proves the DBA view only gets `Binary(subtype 6)`, that the BSON of the
+command sent by the encrypted client does not contain the searched CPF (also for
+ranges and string queries), that unsupported operators (`$regex`, `$gt` on an
+equality field, out-of-range bounds, wrong types, querying a non-queryable
+field, substrings above `strMaxQueryLength`, values above `strMaxLength`) fail
+in the driver with readable errors, that Unicode/emoji work in prefix and
+substring fields, that concurrent inserts on the same value succeed, and that
+an empty key vault or an unreachable cluster becomes a fast, readable 502.
 
 Every pull request runs the backend test suite, Ruff, and a dependency audit,
 plus a clean frontend production build and npm audit. The suite uses MongoDB
