@@ -16,7 +16,6 @@ import argparse
 import json
 import random
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -34,7 +33,6 @@ from encryption import (  # noqa: E402
 from settings import arquivo_seeds, exigir_permissao_de_escrita, settings  # noqa: E402
 
 SEMENTE = 20260819
-SEED_PARALELO = 4
 
 NOMES = ["Marina", "Rafael", "Beatriz", "Caio", "Helena", "Otávio", "Lívia", "Bruno",
          "Camila", "Diego", "Fernanda", "Gustavo", "Isabela", "Leandro", "Natália"]
@@ -165,21 +163,16 @@ def main() -> int:
     # A expansão de QE é grande: os oito campos cifrados, com índices
     # auxiliares, podem ultrapassar 16 MiB por comando em lotes de 500.
     #
-    # Lotes em paralelo: cada insert cifrado espera vários round-trips (tags de
-    # ESC/ECOC por campo), e em série 5.000 titulares levavam ~10 min numa rede
-    # com RTT alto. O paralelismo fica abaixo do contention factor, que existe
-    # justamente para escritas simultâneas sobre o mesmo valor (todo e-mail
-    # termina em @exemplo.invalid).
+    # Em série, de propósito. Lotes em paralelo (4 threads) estouraram o
+    # socketTimeoutMS de 16 s no cluster da demo: cada insert cifrado grava tags
+    # de ESC/ECOC por campo, e todo e-mail termina em @exemplo.invalid — o mesmo
+    # valor de sufixo disputado por todas as threads. insert_many com _id
+    # explícito não é idempotente num retry, então lento e certo ganha.
     lote = 100
-    paralelo = max(1, min(SEED_PARALELO, settings.contention_factor or 1))
-    fatias = [documentos[inicio:inicio + lote] for inicio in range(0, len(documentos), lote)]
-    colecao_cifrada = db_cifrado[COLECAO_CIFRADA]
-    escritos = 0
-    with ThreadPoolExecutor(max_workers=paralelo) as pool:
-        for quantos in pool.map(lambda fatia: len(colecao_cifrada.insert_many([dict(d) for d in fatia]).inserted_ids),
-                                fatias):
-            escritos += quantos
-            print(f"  {escritos}/{len(documentos)}", end="\r", flush=True)
+    for inicio in range(0, len(documentos), lote):
+        fatia = documentos[inicio:inicio + lote]
+        db_cifrado[COLECAO_CIFRADA].insert_many([dict(doc) for doc in fatia])
+        print(f"  {min(inicio + lote, len(documentos))}/{len(documentos)}", end="\r", flush=True)
 
     # Índices só em campo NÃO cifrado. Índice comum sobre campo cifrado é
     # recusado pelo servidor — o módulo 04 tenta um de propósito.
