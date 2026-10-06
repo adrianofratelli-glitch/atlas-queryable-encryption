@@ -16,6 +16,7 @@ import argparse
 import json
 import random
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -30,10 +31,10 @@ from encryption import (  # noqa: E402
     cliente_claro,
     encrypted_fields,
 )
-from settings import settings  # noqa: E402
+from settings import arquivo_seeds, exigir_permissao_de_escrita, settings  # noqa: E402
 
 SEMENTE = 20260819
-ARQUIVO_SEEDS = Path(__file__).resolve().parent / "data" / "demo_seeds.json"
+SEED_PARALELO = 4
 
 NOMES = ["Marina", "Rafael", "Beatriz", "Caio", "Helena", "Otávio", "Lívia", "Bruno",
          "Camila", "Diego", "Fernanda", "Gustavo", "Isabela", "Leandro", "Natália"]
@@ -140,6 +141,8 @@ def main() -> int:
     args = parser.parse_args()
 
     total = 100_000 if args.full else 5_000
+    exigir_permissao_de_escrita("seed_data.py")
+    destino_seeds = arquivo_seeds()
     db_claro = cliente_claro()[settings.mongo_db]
     db_cifrado = cliente_cifrado()[settings.mongo_db]
 
@@ -161,11 +164,22 @@ def main() -> int:
 
     # A expansão de QE é grande: os oito campos cifrados, com índices
     # auxiliares, podem ultrapassar 16 MiB por comando em lotes de 500.
+    #
+    # Lotes em paralelo: cada insert cifrado espera vários round-trips (tags de
+    # ESC/ECOC por campo), e em série 5.000 titulares levavam ~10 min numa rede
+    # com RTT alto. O paralelismo fica abaixo do contention factor, que existe
+    # justamente para escritas simultâneas sobre o mesmo valor (todo e-mail
+    # termina em @exemplo.invalid).
     lote = 100
-    for inicio in range(0, len(documentos), lote):
-        fatia = documentos[inicio:inicio + lote]
-        db_cifrado[COLECAO_CIFRADA].insert_many([dict(doc) for doc in fatia])
-        print(f"  {min(inicio + lote, len(documentos))}/{len(documentos)}", end="\r", flush=True)
+    paralelo = max(1, min(SEED_PARALELO, settings.contention_factor or 1))
+    fatias = [documentos[inicio:inicio + lote] for inicio in range(0, len(documentos), lote)]
+    colecao_cifrada = db_cifrado[COLECAO_CIFRADA]
+    escritos = 0
+    with ThreadPoolExecutor(max_workers=paralelo) as pool:
+        for quantos in pool.map(lambda fatia: len(colecao_cifrada.insert_many([dict(d) for d in fatia]).inserted_ids),
+                                fatias):
+            escritos += quantos
+            print(f"  {escritos}/{len(documentos)}", end="\r", flush=True)
 
     # Índices só em campo NÃO cifrado. Índice comum sobre campo cifrado é
     # recusado pelo servidor — o módulo 04 tenta um de propósito.
@@ -174,8 +188,8 @@ def main() -> int:
     colecao.create_index("uf")
     colecao.create_index("cadastro_em")
 
-    ARQUIVO_SEEDS.parent.mkdir(parents=True, exist_ok=True)
-    ARQUIVO_SEEDS.write_text(json.dumps({
+    destino_seeds.parent.mkdir(parents=True, exist_ok=True)
+    destino_seeds.write_text(json.dumps({
         "semente": SEMENTE,
         "total": total,
         "cpf_repetido": [str(_id) for _id in par],
@@ -183,7 +197,7 @@ def main() -> int:
     }, indent=2))
 
     print(f"\n✅ {total} titulares em {COLECAO_CIFRADA} (cifrada).")
-    print(f"   Par de CPF repetido gravado em {ARQUIVO_SEEDS.name}.")
+    print(f"   Par de CPF repetido gravado em {destino_seeds.name}.")
     return 0
 
 
