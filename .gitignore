@@ -19,3 +19,4 @@ frontend/dist/
 
 # Seeds gerados
 backend/data/demo_seeds*.json
+backend/data/bench.*.json
