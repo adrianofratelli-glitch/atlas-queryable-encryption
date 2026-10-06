@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query
@@ -30,14 +29,15 @@ from encryption import (
     COLECAO_CIFRADA,
     cliente_cifrado,
     cliente_claro,
+    executar_capturando,
     key_vault_collection,
     nomes_dek,
+    resumir_comando_enviado,
 )
-from settings import settings
+from settings import ler_arquivo_seeds, settings
 
 router = APIRouter(prefix="/demo", tags=["demo"])
 
-SEEDS = Path(__file__).resolve().parent.parent / "data" / "demo_seeds.json"
 LIMITE_MAX = 10
 
 # As duas buscas de `_executar` vão para clientes MongoClient distintos (cada
@@ -59,10 +59,11 @@ def _cronometrar(fn):
 
 def _ids_do_par() -> list:
     """Os `_id` do par plantado, se o seed já rodou."""
-    if not SEEDS.exists():
+    arquivo = ler_arquivo_seeds()
+    if arquivo is None:
         return []
     try:
-        seeds = json.loads(SEEDS.read_text())
+        seeds = json.loads(arquivo.read_text())
         return [ObjectId(bruto) for bruto in seeds.get("cpf_repetido", [])]
     except Exception:
         return []
@@ -81,14 +82,18 @@ def _executar(filtro: dict, limite: int) -> dict:
     """
     projecao = {"observacoes": 0}
     futuro_cifrado = _executor.submit(
-        _cronometrar, lambda: list(_colecao(cliente_cifrado()).find(filtro, projecao).limit(limite))
+        _cronometrar,
+        lambda: executar_capturando(
+            "find", COLECAO_CIFRADA,
+            lambda: list(_colecao(cliente_cifrado()).find(filtro, projecao).limit(limite)),
+        ),
     )
     futuro_claro = _executor.submit(
         _cronometrar, lambda: list(_colecao(cliente_claro()).find(filtro, projecao).limit(limite))
     )
 
     try:
-        cifrados, ms_app = futuro_cifrado.result()
+        (cifrados, enviado), ms_app = futuro_cifrado.result()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
 
@@ -122,6 +127,10 @@ def _executar(filtro: dict, limite: int) -> dict:
                 "limit": limite,
             },
             "clients": ["MongoClient + AutoEncryptionOpts", "MongoClient comum"],
+            # O comando como o servidor o recebeu, capturado por CommandListener
+            # depois da auto-encryption. É a prova de que o valor buscado não
+            # chega em claro: o campo cifrado aparece como Binary(subtype 6).
+            "sent_to_server": resumir_comando_enviado(enviado),
             "explain": {
                 "mode": "not_auto_executed",
                 "reason": "o painel não repete a consulta com executionStats; use o comando exibido em ambiente controlado",
@@ -161,9 +170,17 @@ def buscar(
     """
     filtro: dict = {}
     tipo = None
-    if cpf:
-        filtro["cpf"] = "".join(ch for ch in cpf if ch.isdigit())
+    if cpf is not None:
+        digitos = "".join(ch for ch in cpf if ch in "0123456789")
+        # Só pontuação de CPF é tolerada. Sem esta checagem, "abc.def.ghi-jk"
+        # virava uma busca cifrada por "" e voltava zero — que na tela parece
+        # a prova da tese, e é só entrada inválida.
+        if len(digitos) != 11 or any(ch not in "0123456789.- " for ch in cpf):
+            raise HTTPException(status_code=422, detail="CPF deve ter 11 dígitos (pontuação opcional).")
+        filtro["cpf"] = digitos
         tipo = "igualdade sobre campo cifrado"
+    if salario_min is not None and salario_max is not None and salario_min > salario_max:
+        raise HTTPException(status_code=422, detail="salario_min não pode ser maior que salario_max.")
     if salario_min is not None or salario_max is not None:
         faixa: dict = {}
         if salario_min is not None:
@@ -172,14 +189,16 @@ def buscar(
             faixa["$lte"] = salario_max
         filtro["salario"] = faixa
         tipo = "faixa sobre campo cifrado" if tipo is None else "igualdade + faixa sobre campo cifrado"
-    if uf:
-        filtro["uf"] = uf.upper()[:2]
+    if uf is not None:
+        if len(uf) != 2 or not uf.isascii() or not uf.isalpha():
+            raise HTTPException(status_code=422, detail="UF deve ter 2 letras, ex.: SP.")
+        filtro["uf"] = uf.upper()
         tipo = tipo or "campo em claro (controle)"
     if not filtro:
         raise HTTPException(status_code=422, detail="Informe cpf, faixa de salário ou uf.")
 
     resultado = _executar(filtro, limite)
-    cifrado = bool(cpf) or filtro.get("salario") is not None
+    cifrado = "cpf" in filtro or "salario" in filtro
     return {
         "filtro": serializar(filtro),
         "tipo": tipo,
@@ -224,7 +243,11 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
         "input": f"${item['campo']}", item["argumento"]: item["valor"]
     }}}
     try:
-        encontrados = list(_colecao(cliente_cifrado()).find(filtro, {"_id": 1, "nome": 1, item["campo"]: 1}).limit(LIMITE_MAX))
+        encontrados, enviado = executar_capturando(
+            "find", COLECAO_CIFRADA,
+            lambda: list(_colecao(cliente_cifrado()).find(filtro, {"_id": 1, "nome": 1, item["campo"]: 1})
+                         .limit(LIMITE_MAX)),
+        )
         ids = [doc["_id"] for doc in encontrados]
         # A visão sem chave lê os mesmos documentos por _id e exibe o binário
         # cifrado: evita fingir que o cliente comum consegue montar a busca QE.
@@ -236,6 +259,7 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
         "operador": item["operador"], "modo": tipo, "valor": item["valor"],
         "limite": LIMITE_MAX,
         "filtro": serializar(filtro),
+        "enviado_ao_servidor": resumir_comando_enviado(enviado),
         "aplicacao": {"encontrados": len(encontrados), "documentos": [serializar(d) for d in encontrados]},
         "dba": {"encontrados": len(claros), "documentos": [serializar(d) for d in claros]},
         "leitura": (
@@ -303,8 +327,8 @@ def par_repetido():
     Encryption é randomizado e continua consultável. Achar esse par no palco por
     sorte não é opção: ele é plantado pelo seed.
     """
-    if not SEEDS.exists():
-        raise HTTPException(status_code=503, detail="Rode seed_data.py — demo_seeds.json ausente.")
+    if ler_arquivo_seeds() is None:
+        raise HTTPException(status_code=503, detail="Rode seed_data.py — metadados do seed ausentes.")
     ids = _ids_do_par()
     if len(ids) < 2:
         raise HTTPException(status_code=503, detail="Seed sem par de CPF repetido; rode seed_data.py --drop.")

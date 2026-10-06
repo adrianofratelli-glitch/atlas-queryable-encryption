@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from encryption import COLECAO_CIFRADA, cliente_claro, key_vault_collection  # noqa: E402
-from settings import settings  # noqa: E402
+from settings import exigir_permissao_de_escrita, settings  # noqa: E402
 
 # Coleções de versões anteriores desta PoV, que tinha uma cópia em claro para
 # medir storage e uma coorte separada para crypto shredding. Continuam no escopo
@@ -41,6 +41,7 @@ def main() -> int:
     parser.add_argument("--chaves", action="store_true",
                         help="apaga TAMBÉM o cofre — irreversível, todo ciphertext vira lixo")
     args = parser.parse_args()
+    exigir_permissao_de_escrita("limpar-cofre.py")
 
     db = cliente_claro()[settings.mongo_db]
     for nome in ESCOPO:

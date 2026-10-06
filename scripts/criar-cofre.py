@@ -16,7 +16,7 @@ from encryption import (  # noqa: E402
     master_key_ref,
     nomes_dek,
 )
-from settings import settings  # noqa: E402
+from settings import exigir_permissao_de_escrita, settings  # noqa: E402
 
 # Uma DEK por campo por coleção — não é escolha nossa: o Queryable Encryption
 # recusa a coleção se dois campos compartilharem keyId (`Duplicate key ids are
@@ -25,6 +25,7 @@ NOMES = nomes_dek()
 
 
 def main() -> int:
+    exigir_permissao_de_escrita("criar-cofre.py")
     descricao = descricao_kms()
     if not descricao["configurado"]:
         print(f"❌ KMS '{descricao['provedor']}' não configurado. Veja backend/.env.example.", file=sys.stderr)

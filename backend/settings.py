@@ -93,3 +93,56 @@ class Settings:
 
 
 settings = Settings()
+
+
+# ── Guarda de escrita no banco da demo ───────────────────────────────────────
+# Scripts que dropam, semeiam ou criam DEK rodam livremente em bancos `*_test`.
+# Contra o banco da demo (e o cofre dela) exigem ALLOW_DEMO_DB_WRITE=1: um seed
+# --drop disparado no terminal errado minutos antes da reunião apaga a demo.
+SUFIXO_TESTE = "_test"
+
+
+def banco_de_teste(nome: str) -> bool:
+    return nome.endswith(SUFIXO_TESTE)
+
+
+def alvos_de_escrita(config: Settings | None = None) -> tuple[str, str]:
+    """Banco da coleção cifrada e banco do cofre — os dois que os scripts escrevem."""
+    config = config or settings
+    return config.mongo_db, config.key_vault_ns.split(".", 1)[0]
+
+
+def exigir_permissao_de_escrita(acao: str, config: Settings | None = None) -> None:
+    """Recusa escrever no banco da demo sem ALLOW_DEMO_DB_WRITE=1.
+
+    Levanta SystemExit com mensagem legível; os scripts não precisam tratar.
+    """
+    bancos = alvos_de_escrita(config)
+    demo = [nome for nome in bancos if not banco_de_teste(nome)]
+    if demo and os.getenv("ALLOW_DEMO_DB_WRITE", "").strip() != "1":
+        raise SystemExit(
+            f"❌ {acao} recusado: '{', '.join(sorted(set(demo)))}' é banco da demo. "
+            "Use um QE_DB/QE_KEY_VAULT_NS terminado em _test, ou exporte "
+            "ALLOW_DEMO_DB_WRITE=1 se é isso mesmo."
+        )
+
+
+# ── Metadados do seed ────────────────────────────────────────────────────────
+# Um arquivo POR BANCO. Com um arquivo só, semear o banco `_test` sobrescrevia
+# os `_id` do par plantado da demo, e o "Mostrar o par" da demo passava a
+# responder 503 sem ninguém ter tocado nela.
+SEEDS_LEGADO = BACKEND_DIR / "data" / "demo_seeds.json"
+
+
+def arquivo_seeds(banco: str | None = None) -> Path:
+    return BACKEND_DIR / "data" / f"demo_seeds.{banco or settings.mongo_db}.json"
+
+
+def ler_arquivo_seeds(banco: str | None = None) -> Path | None:
+    """O arquivo do banco ativo; o nome antigo vale só para o banco da demo."""
+    proprio = arquivo_seeds(banco)
+    if proprio.exists():
+        return proprio
+    if not banco_de_teste(banco or settings.mongo_db) and SEEDS_LEGADO.exists():
+        return SEEDS_LEGADO
+    return None

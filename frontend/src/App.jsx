@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useApi } from './hooks/useApi'
 import Documento from './components/Documento'
-import Bloco from './components/Bloco'
 import QueryDetails from './components/QueryDetails'
 
 /**
@@ -100,14 +99,19 @@ function Resultado({ resultado }) {
         <Painel titulo="SUA APLICAÇÃO" sub="MongoClient + AutoEncryptionOpts"
           dados={resultado.aplicacao} destaque campos={campos} />
         <Painel titulo="O DBA · O BACKUP · A NUVEM" sub="MongoClient comum, mesma URI"
-          dados={resultado.dba} campos={campos} />
+          dados={resultado.dba} campos={campos}
+          aviso={resultado.campo_cifrado
+            ? 'Este filtro saiu em claro: sem a DEK, o cliente comum não tem como cifrar o valor que o DBA digitou.'
+            : undefined} />
       </div>
-      <Bloco dados={resultado.filtro} rotulo="Ver o filtro que saiu daqui" />
       <QueryDetails
         operation={resultado.query_details?.operation}
         namespace={resultado.query_details?.namespace}
-        query={resultado.query_details?.command}
-        explain={resultado.query_details?.explain}
+        query={resultado.query_details?.sent_to_server || resultado.query_details?.command}
+        note={resultado.query_details?.sent_to_server
+          ? 'como o servidor recebeu, capturado depois da auto-encryption'
+          : undefined}
+        label="Ver query / comando que chegou ao servidor"
       />
     </>
   )
@@ -252,7 +256,12 @@ export default function App() {
                 dados={buscaString.dba} campos={['_id', 'nome', buscaString.campo]}
                 aviso="Não há como montar esta busca sem a chave: o servidor só casa o trecho com o ciphertext que o driver gera." />
             </div>
-            <Bloco dados={buscaString.filtro} rotulo="Ver a expressão executada" />
+            <QueryDetails operation="find" namespace="clientes"
+              query={buscaString.enviado_ao_servidor || buscaString.filtro}
+              note={buscaString.enviado_ao_servidor
+                ? 'como o servidor recebeu, capturado depois da auto-encryption'
+                : undefined}
+              label="Ver query / comando que chegou ao servidor" />
           </>}
         </div>
 

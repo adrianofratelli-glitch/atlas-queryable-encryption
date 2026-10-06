@@ -48,8 +48,7 @@ Screenshot de referência: `docs/screenshots/01-equality.png`.
 | `App.jsx` | tela inteira: estado da busca, lista de titulares e opções fixas de faixa e busca parcial, selo de preflight, toast de erro global, painel duplo, seção "Provas adicionais" |
 | `components/Cifra.jsx` | renderiza um valor de campo respeitando a regra de procedência: se `__cifrado__` for `true`, mostra hex do **payload** (nunca do início do blob) + bytes reais + prefixo da DEK; senão, mostra o valor puro |
 | `components/Documento.jsx` | renderiza um documento inteiro com `ORDEM` de campos **fixa e idêntica** nos dois painéis — se cada lado renderizasse na ordem que o BSON devolveu, as linhas desalinhariam e o efeito "mesmo documento, duas leituras" desapareceria |
-| `components/Bloco.jsx` | `<details>` recolhível com JSON cru da resposta do servidor, para quem quiser conferir |
-| `components/QueryDetails.jsx` | `<details>` recolhível mostrando a query/comando que efetivamente rodou (operação, namespace, filtro), com **mascaramento automático** de chaves sensíveis (regex `authorization\|password\|secret\|token\|uri\|cpf\|cnpj\|email\|keymaterial`) |
+| `components/QueryDetails.jsx` | `<details>` recolhível "Ver query / comando que chegou ao servidor". Mostra o comando `find` **como o servidor o recebeu**, capturado por `CommandListener` depois da auto-encryption (`query_details.sent_to_server` em `/demo/buscar`, `enviado_ao_servidor` em `/demo/buscar-string`): o valor buscado aparece como `<Binary subtype 6 · N B · ciphertext>`. Valores em claro sob chaves sensíveis são mascarados em qualquer profundidade (regex `authorization\|password\|secret\|token\|uri\|cpf\|cnpj\|email\|salario\|score\|keymaterial\|key`); o rótulo de ciphertext nunca é mascarado, porque é a prova |
 | `hooks/useApi.js` | `call()` com timeout (30s padrão, configurável), `AbortController`, e o evento customizado `api-error` que alimenta o toast global |
 
 ### `Cifra.jsx` — o componente onde mora a regra de procedência
@@ -69,7 +68,7 @@ Um `Binary(subtype 6)` tem 17 bytes de cabeçalho (tipo + UUID da DEK) que são 
 2. `apiBusca.call('/demo/buscar?cpf=...')` → `GET /demo/buscar`.
 3. Painel esquerdo ("SUA APLICAÇÃO"): 1 documento, CPF legível.
 4. Painel direito ("O DBA · O BACKUP · A NUVEM"): mostra duas evidências separadas. (a) O mesmo filtro sem a chave devolve 0 — o servidor não casa valor em claro com ciphertext. (b) Lendo direto por `_id` os mesmos documentos que a aplicação achou (`dba.origem == "por_id"`), o DBA vê `cpf` e `salario` como `Binary(subtype 6)`. O zero prova que a busca exige a chave; a leitura por `_id` prova que o disco não vaza o dado.
-5. `<Bloco/>` e `<QueryDetails/>` recolhidos abaixo, para quem quiser ver o filtro/comando cru.
+5. `<QueryDetails/>` recolhido abaixo: o comando que chegou ao servidor, com o CPF buscado como `Binary(subtype 6)`. É a resposta a "mas o valor da busca não vai em claro?" — o filtro em claro que a aplicação montou não é exibido.
 
 ### Fluxo 3 — busca por faixa (salário)
 
@@ -93,6 +92,7 @@ A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial
 - Toast global (`ErroToast`) escuta o evento `api-error`, deduplica erros repetidos por 8s (evita spam de toast em falhas de rede intermitentes), e desaparece sozinho em 6s.
 - `useApi.js` distingui cancelamento esperado (troca de tela, StrictMode) de erro real — um `AbortController` cancelado não vira erro exibido ao usuário.
 - Falha ao carregar titulares mostra mensagem específica + botão "Recarregar titulares", não trava a tela.
+- Entrada inválida vira `422` com mensagem em pt-BR antes de tocar no banco (CPF sem 11 dígitos ASCII, `salario_min > salario_max`, UF fora de 2 letras ASCII, `limite` fora de 1–10, tipo de busca parcial fora da allowlist). Falha do driver vira `502` com o texto do servidor sem `full error`, sem URI e sem hostname do Atlas (`routers/_comum.py:mensagem_segura`).
 - `/demo/par-repetido` devolve `503` (não `200` com dado incorreto) se os dois documentos do par plantado não existirem — evita a tela afirmar "ciphertexts iguais" quando na verdade o seed não rodou ou rodou incompleto.
 
 ## Roteiro de demo (5 minutos)
@@ -100,7 +100,7 @@ A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial
 1. **(0:20) A pergunta.** "Quem no seu time consegue ler o CPF dos seus clientes hoje?" — deixar responderem.
 2. **(0:40) O que a tela é.** Dois clientes contra a mesma coleção, no mesmo instante. O da direita tem as mesmas credenciais de banco que o DBA já tem — falta a chave, não permissão.
 3. **(1:30) Igualdade.** Escolher titular, buscar. Esquerda: 1 documento, CPF legível. Direita: `Binary(subtype 6)`, zero resultados. Frase: "não é permissão negada, é matemática."
-4. **(2:15) Faixa.** `$gte`/`$lte` sobre campo cifrado — cinco documentos na aplicação, zero no cliente comum. Mencionar GA a partir do 8.0.
+4. **(2:15) Faixa.** `$gte`/`$lte` sobre campo cifrado — cinco documentos na aplicação, zero no cliente comum. Mencionar GA a partir do 8.0. Abrir "Ver query / comando que chegou ao servidor": os limites da faixa chegaram como `Binary(subtype 6)`.
 5. **(2:45) O controle.** Buscar por UF — os dois lados acham o mesmo. Sem esse passo, alguém pode achar que o painel direito não enxerga a coleção.
 6. **(3:30) A tabela de alternativas.** CSFLE e pgcrypto determinístico compram igualdade vendendo frequência.
 7. **(4:15) O par.** Mesmo CPF, ciphertexts distintos — prova visual da randomização.

@@ -18,4 +18,5 @@ frontend/dist/
 .DS_Store
 
 # Seeds gerados
-backend/data/demo_seeds.json
+backend/data/demo_seeds*.json
+backend/data/bench.*.json

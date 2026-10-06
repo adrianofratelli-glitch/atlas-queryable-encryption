@@ -30,10 +30,9 @@ from encryption import (  # noqa: E402
     cliente_claro,
     encrypted_fields,
 )
-from settings import settings  # noqa: E402
+from settings import arquivo_seeds, exigir_permissao_de_escrita, settings  # noqa: E402
 
 SEMENTE = 20260819
-ARQUIVO_SEEDS = Path(__file__).resolve().parent / "data" / "demo_seeds.json"
 
 NOMES = ["Marina", "Rafael", "Beatriz", "Caio", "Helena", "Otávio", "Lívia", "Bruno",
          "Camila", "Diego", "Fernanda", "Gustavo", "Isabela", "Leandro", "Natália"]
@@ -140,6 +139,8 @@ def main() -> int:
     args = parser.parse_args()
 
     total = 100_000 if args.full else 5_000
+    exigir_permissao_de_escrita("seed_data.py")
+    destino_seeds = arquivo_seeds()
     db_claro = cliente_claro()[settings.mongo_db]
     db_cifrado = cliente_cifrado()[settings.mongo_db]
 
@@ -161,6 +162,12 @@ def main() -> int:
 
     # A expansão de QE é grande: os oito campos cifrados, com índices
     # auxiliares, podem ultrapassar 16 MiB por comando em lotes de 500.
+    #
+    # Em série, de propósito. Lotes em paralelo (4 threads) estouraram o
+    # socketTimeoutMS de 16 s no cluster da demo: cada insert cifrado grava tags
+    # de ESC/ECOC por campo, e todo e-mail termina em @exemplo.invalid — o mesmo
+    # valor de sufixo disputado por todas as threads. insert_many com _id
+    # explícito não é idempotente num retry, então lento e certo ganha.
     lote = 100
     for inicio in range(0, len(documentos), lote):
         fatia = documentos[inicio:inicio + lote]
@@ -174,8 +181,8 @@ def main() -> int:
     colecao.create_index("uf")
     colecao.create_index("cadastro_em")
 
-    ARQUIVO_SEEDS.parent.mkdir(parents=True, exist_ok=True)
-    ARQUIVO_SEEDS.write_text(json.dumps({
+    destino_seeds.parent.mkdir(parents=True, exist_ok=True)
+    destino_seeds.write_text(json.dumps({
         "semente": SEMENTE,
         "total": total,
         "cpf_repetido": [str(_id) for _id in par],
@@ -183,7 +190,7 @@ def main() -> int:
     }, indent=2))
 
     print(f"\n✅ {total} titulares em {COLECAO_CIFRADA} (cifrada).")
-    print(f"   Par de CPF repetido gravado em {ARQUIVO_SEEDS.name}.")
+    print(f"   Par de CPF repetido gravado em {destino_seeds.name}.")
     return 0
 
 
