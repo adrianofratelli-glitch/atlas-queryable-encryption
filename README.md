@@ -90,8 +90,22 @@ BSON: the searched CPF bytes are absent, and the filter holds a
 |---|---|
 | TDE or encrypted disks | Protect data at rest; users with read credentials still see plaintext |
 | Deterministic CSFLE | Enables equality because equal values produce equal ciphertext, which leaks frequency |
-| `pgcrypto` or application encryption | Protects the value but removes the database's ability to filter it |
-| **Queryable Encryption** | **Randomized, queryable ciphertext for equality, range, and selected string patterns, with keys outside the server** |
+| PostgreSQL `pgcrypto` | The database can still filter, e.g. `WHERE pgp_sym_decrypt(col, key) = ...`, but every `pgcrypto` function runs inside the server, so the key and the plaintext pass through it; the PostgreSQL docs say to trust the system and database administrators or encrypt in the client instead |
+| Randomized encryption in the application | The server never sees the key or the plaintext, but it cannot filter on the field: the application has to fetch and decrypt to compare |
+| **Queryable Encryption** | **The server filters by equality, range, and selected string patterns over randomized ciphertext, without ever receiving the key or the plaintext** |
+
+The difference is the trust boundary, not whether filtering is possible.
+With `pgcrypto`, filtering in the database means handing the key (or the
+plaintext) to the server for that query. With Queryable Encryption the driver
+encrypts the query value and the server matches it against ciphertext. Sources,
+checked on 2026-10-09:
+[PostgreSQL `pgcrypto`, F.26.8.3 Security Limitations](https://www.postgresql.org/docs/current/pgcrypto.html)
+("All pgcrypto functions run inside the database server"; PGP functions prefix
+the data with random bytes, while the raw `encrypt()` functions default to an
+all-zero IV) and
+[MongoDB Queryable Encryption](https://www.mongodb.com/docs/manual/core/queryable-encryption/)
+("The server has no knowledge of the data it processes"; equality, range,
+prefix, suffix, and substring queries).
 
 ## Requirements
 
