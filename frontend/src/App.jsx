@@ -120,8 +120,9 @@ function Resultado({ resultado }) {
 const ALTERNATIVAS = [
   ['TDE · disco cifrado', 'cifra em repouso; quem tem credencial de leitura vê tudo em claro', 'nao'],
   ['CSFLE determinístico', 'permite igualdade porque o mesmo valor vira o mesmo ciphertext — e é isso que vaza frequência no dump', 'meio'],
-  ['pgcrypto / cifrar na aplicação', 'protege o valor, mas o banco deixa de conseguir filtrar por ele', 'nao'],
-  ['Queryable Encryption', 'ciphertext randomizado E consultável: igualdade e faixa, com a chave fora do servidor', 'sim'],
+  ['pgcrypto (PostgreSQL)', 'o banco filtra, mas decifrando no servidor: a chave e o plaintext passam por ele na consulta (pgp_sym_decrypt no WHERE)', 'meio'],
+  ['cifra randomizada na aplicação', 'o servidor não vê chave nem plaintext, mas não consegue filtrar: a aplicação traz e decifra para comparar', 'nao'],
+  ['Queryable Encryption', 'o servidor filtra por igualdade, faixa e trechos de texto sobre ciphertext randomizado, sem nunca receber a chave nem o plaintext', 'sim'],
 ]
 
 export default function App() {
@@ -284,6 +285,14 @@ export default function App() {
               ))}
             </tbody>
           </table>
+          <p className="tese" style={{ marginTop: 12 }}>
+            A diferença é a fronteira de confiança, não a capacidade de filtrar: com pgcrypto,
+            filtrar no banco exige entregar a chave ao servidor; com Queryable Encryption, o
+            servidor casa ciphertext contra ciphertext.{' '}
+            <a href="https://www.postgresql.org/docs/current/pgcrypto.html" target="_blank" rel="noreferrer">doc pgcrypto</a>
+            {' · '}
+            <a href="https://www.mongodb.com/docs/manual/core/queryable-encryption/" target="_blank" rel="noreferrer">doc Queryable Encryption</a>
+          </p>
 
           <h3 style={{ marginTop: 22 }}>Ciphertext randomizado</h3>
           <p className="tese">Mesmo CPF, dois ciphertexts distintos.</p>

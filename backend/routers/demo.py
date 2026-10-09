@@ -10,8 +10,11 @@ O filtro por campo cifrado é o ponto que separa Queryable Encryption de tudo qu
 veio antes. O driver cifra o valor da busca com a mesma DEK e manda o
 ciphertext; o servidor casa contra estruturas de metadados que ele mantém sem
 conseguir interpretar. É por isso que a igualdade funciona sem ciphertext
-determinístico — e é o determinismo que faz CSFLE e `pgcrypto` vazarem
-frequência para quem tem o dump.
+determinístico — e é o determinismo que faz CSFLE determinístico (e as funções
+"raw" `encrypt()` do pgcrypto, cujo IV padrão é zero) vazarem frequência para
+quem tem o dump. As funções PGP do pgcrypto são randomizadas e o PostgreSQL
+consegue filtrar com elas, mas decifrando no servidor, com a chave na sessão:
+a diferença de QE é a fronteira de confiança, não a capacidade de filtrar.
 """
 
 from __future__ import annotations
@@ -321,9 +324,9 @@ def exemplos(quantos: int = Query(4, ge=1, le=8)):
 def par_repetido():
     """Dois titulares com o MESMO CPF e ciphertexts diferentes.
 
-    É o argumento anti-CSFLE, e ele é visual. CSFLE e `pgcrypto` determinístico
-    permitem igualdade justamente por cifrarem o mesmo valor no mesmo
-    ciphertext — e é isso que entrega frequência a quem tem o dump. Queryable
+    É o argumento anti-CSFLE, e ele é visual. CSFLE determinístico permite
+    igualdade justamente por cifrar o mesmo valor no mesmo ciphertext — e é
+    isso que entrega frequência a quem tem o dump. Queryable
     Encryption é randomizado e continua consultável. Achar esse par no palco por
     sorte não é opção: ele é plantado pelo seed.
     """

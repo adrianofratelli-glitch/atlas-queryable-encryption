@@ -84,7 +84,7 @@ A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial
 
 ### Fluxo 6 — "Provas adicionais" (seção recolhida)
 
-- **Tabela de alternativas**: TDE, CSFLE determinístico, pgcrypto/cifra na aplicação, Queryable Encryption — com veredito (✗/⚠/✓) e a linha do MongoDB destacada como conclusão, não como mais um item.
+- **Tabela de alternativas**: TDE (✗), CSFLE determinístico (⚠), pgcrypto (⚠: o PostgreSQL filtra com `pgp_sym_decrypt` no `WHERE`, mas decifrando no servidor, com a chave na sessão), cifra randomizada na aplicação (✗: o servidor não vê a chave, mas também não filtra) e Queryable Encryption (✓) — com a linha do MongoDB destacada como conclusão, não como mais um item. Abaixo da tabela, uma frase e os links da doc oficial: a diferença é a fronteira de confiança, não a capacidade de filtrar.
 - **Par de CPF repetido**: botão "Mostrar o par" chama `GET /demo/par-repetido`. Dois titulares com o mesmo CPF, ciphertexts binários diferentes — prova visual de que a criptografia é randomizada (e por isso CSFLE determinístico recebe ⚠, não ✓, na tabela acima).
 
 ## Tratamento de erro e resiliência
@@ -102,7 +102,7 @@ A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial
 3. **(1:30) Igualdade.** Escolher titular, buscar. Esquerda: 1 documento, CPF legível. Direita: `Binary(subtype 6)`, zero resultados. Frase: "não é permissão negada, é matemática."
 4. **(2:15) Faixa.** `$gte`/`$lte` sobre campo cifrado — cinco documentos na aplicação, zero no cliente comum. Mencionar GA a partir do 8.0. Abrir "Ver query / comando que chegou ao servidor": os limites da faixa chegaram como `Binary(subtype 6)`.
 5. **(2:45) O controle.** Buscar por UF — os dois lados acham o mesmo. Sem esse passo, alguém pode achar que o painel direito não enxerga a coleção.
-6. **(3:30) A tabela de alternativas.** CSFLE e pgcrypto determinístico compram igualdade vendendo frequência.
+6. **(3:30) A tabela de alternativas.** CSFLE determinístico compra igualdade vendendo frequência. pgcrypto filtra, mas decifrando dentro do servidor ("All pgcrypto functions run inside the database server", doc oficial F.26.8.3): quem administra o banco precisa ser confiável. QE filtra sem que o servidor receba chave ou plaintext. Não diga que o pgcrypto "não filtra": um DBA PostgreSQL derruba a frase na hora.
 7. **(4:15) O par.** Mesmo CPF, ciphertexts distintos — prova visual da randomização.
 8. **(4:45) Fechamento.** Oferecer medir contra o ambiente do cliente.
 
