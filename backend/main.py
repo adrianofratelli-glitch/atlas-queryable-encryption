@@ -52,7 +52,7 @@ async def lifespan(_app: FastAPI):
         fechar_clientes()
 
 
-app = FastAPI(title="Atlas Queryable Encryption", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="Atlas Queryable Encryption", version="1.1.1", lifespan=lifespan)
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 app.add_middleware(ApiHardeningMiddleware)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 — 2026-10-09
+
+- Tabela "Alternativas" (UI e README): pgcrypto deixa de ser apresentado como incapaz de filtrar. O PostgreSQL filtra decifrando no servidor (`pgp_sym_decrypt` no `WHERE`), com a chave na sessão; QE filtra sobre ciphertext sem o servidor receber chave nem plaintext. A diferença é a fronteira de confiança, com links para a doc oficial de pgcrypto e de Queryable Encryption. "Cifra randomizada na aplicação" virou linha própria.
+- Docstrings de `routers/demo.py` sem a generalização "pgcrypto determinístico" (as funções PGP usam prefixo aleatório; só as raw `encrypt()` têm IV zero por padrão).
+- `backend/tests/test_tese_alternativas.py` impede a afirmação falsa de voltar.
+
 ## 1.1.0 — 2026-10-06
 
 - Prova de rede: o drawer "Ver query / comando que chegou ao servidor" mostra o `find` capturado por `CommandListener` depois da auto-encryption, com o valor buscado como `Binary(subtype 6)`; o filtro em claro não é mais exibido.
