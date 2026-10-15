@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Atualiza dependências compatíveis e pisos de segurança; alinha metadados de versão entre aplicação e frontend.
+
 ## 1.1.1 — 2026-10-09
 
 - Tabela "Alternativas" (UI e README): pgcrypto deixa de ser apresentado como incapaz de filtrar. O PostgreSQL filtra decifrando no servidor (`pgp_sym_decrypt` no `WHERE`), com a chave na sessão; QE filtra sobre ciphertext sem o servidor receber chave nem plaintext. A diferença é a fronteira de confiança, com links para a doc oficial de pgcrypto e de Queryable Encryption. "Cifra randomizada na aplicação" virou linha própria.
