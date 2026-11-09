@@ -1,5 +1,7 @@
 # UI e fluxos — Atlas Queryable Encryption
 
+> Números de linha podem ficar defasados após mudanças: a fonte atualizada é [MAPA_DO_CODIGO.md](../MAPA_DO_CODIGO.md).
+
 > Telas, componentes e roteiro de demo. Arquitetura de backend em `architecture.md`; queries e Queryable Encryption em `queries.md`.
 
 ## A tela é uma só

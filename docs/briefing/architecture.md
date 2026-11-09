@@ -1,5 +1,7 @@
 # Arquitetura — Atlas Queryable Encryption
 
+> Números de linha podem ficar defasados após mudanças: a fonte atualizada é [MAPA_DO_CODIGO.md](../MAPA_DO_CODIGO.md).
+
 > Se o gestor perguntar "como isso é montado", a resposta está aqui. Queries e índices reais estão em `queries.md`; telas e fluxo de uso em `ui-flows.md`. Não há agente de IA nesta PoV — ver seção "Sem LLM" no fim.
 
 ## O que esta PoV prova
@@ -87,18 +89,18 @@ O cliente cifrado é criado com um `CommandListener` (`encryption.py:CapturaDeCo
 
 ### Os dois clientes MongoDB — o coração da PoV
 
-Definidos em `backend/encryption.py:232-281`. Não é detalhe de implementação, é o artefato de demonstração inteiro:
+Definidos em `backend/encryption.py:316-367`. Não é detalhe de implementação, é o artefato de demonstração inteiro:
 
-- **`cliente_cifrado()`** (`encryption.py:256`) — `MongoClient` com `AutoEncryptionOpts` (`encryption.py:243-253`), `encryptedFieldsMap`, `crypt_shared_lib_required=True`. Cifra valores na escrita e na busca, decifra na leitura, tudo dentro do processo. É "a aplicação".
-- **`cliente_claro()`** (`encryption.py:232`) — `MongoClient` comum, **mesma URI, mesmas credenciais de banco**. Não é usuário com permissão reduzida — é exatamente o acesso que o DBA/infra/backup/nuvem já têm hoje. O que falta a ele é a chave, não permissão. É read-only por convenção da PoV (nunca grava na coleção cifrada).
+- **`cliente_cifrado()`** (`encryption.py:340`) — `MongoClient` com `AutoEncryptionOpts` (`encryption.py:327-337`), `encryptedFieldsMap`, `crypt_shared_lib_required=True`. Cifra valores na escrita e na busca, decifra na leitura, tudo dentro do processo. É "a aplicação".
+- **`cliente_claro()`** (`encryption.py:316`) — `MongoClient` comum, **mesma URI, mesmas credenciais de banco**. Não é usuário com permissão reduzida — é exatamente o acesso que o DBA/infra/backup/nuvem já têm hoje. O que falta a ele é a chave, não permissão. É read-only por convenção da PoV (nunca grava na coleção cifrada).
 
 ### Decisão de design: por que `required=True` no crypt_shared
 
-Sem `crypt_shared_lib_required=True`, o driver cairia silenciosamente para `mongocryptd` (um processo auxiliar), que sobe órfão na porta `:27020` e falha de um jeito que parece problema de rede. Falhar alto no boot é a escolha deliberada (`encryption.py:248-252`).
+Sem `crypt_shared_lib_required=True`, o driver cairia silenciosamente para `mongocryptd` (um processo auxiliar), que sobe órfão na porta `:27020` e falha de um jeito que parece problema de rede. Falhar alto no boot é a escolha deliberada (`encryption.py:335-336` e `345-349`).
 
 ### Decisão de design: lock não-reentrante e ordem de montagem
 
-`_auto_encryption_opts()` é montado **fora** do lock (`encryption.py:266-281`) porque montá-lo lê o cofre (resolve `keyId` de cada campo), e ler o cofre usa o cliente claro, que disputa o mesmo lock. Com lock não reentrante isso seria deadlock silencioso — processo parado a 0% CPU, sem exceção, parecendo problema de rede.
+`_auto_encryption_opts()` é montado **fora** do lock (`encryption.py:351-356`) porque montá-lo lê o cofre (resolve `keyId` de cada campo), e ler o cofre usa o cliente claro, que disputa o mesmo lock. Com lock não reentrante isso seria deadlock silencioso — processo parado a 0% CPU, sem exceção, parecendo problema de rede.
 
 ### Middlewares de segurança (`backend/security.py`)
 

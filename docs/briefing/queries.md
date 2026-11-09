@@ -1,5 +1,7 @@
 # Queries, índices e Queryable Encryption — Atlas Queryable Encryption
 
+> Números de linha podem ficar defasados após mudanças: a fonte atualizada é [MAPA_DO_CODIGO.md](../MAPA_DO_CODIGO.md).
+
 > Onde está cada query, o que ela faz, e por quê. Tudo extraído do código real em `backend/` e `scripts/`. Este projeto **não usa aggregation pipelines** — só `find()` e comandos administrativos (`create_collection`, `create_index`, `create_data_key`). Confirmado por grep em `backend/` e `scripts/` por `.aggregate(`, `.find(`, `create_index`, `createIndex`, `encryptedFieldsMap`.
 
 ## 1. Queries de leitura (`find`)
