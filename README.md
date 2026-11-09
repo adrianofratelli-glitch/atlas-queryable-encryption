@@ -14,6 +14,8 @@ rest, in transit, in use, in logs, or in backups.
 This public overview is in English; the PoV interface and presentation-specific
 documentation remain in Brazilian Portuguese.
 
+Code map (pt-BR): [docs/MAPA_DO_CODIGO.md](docs/MAPA_DO_CODIGO.md)
+
 ## The PoV
 
 One screen sends the same filter through **two clients against the same
