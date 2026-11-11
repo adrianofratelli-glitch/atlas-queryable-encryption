@@ -124,3 +124,12 @@ Confirmado por busca no código-fonte: **não há agente de IA, LLM ou orquestra
 ## Segredos e configuração
 
 Credenciais vivem só em `backend/.env` (fora do git). A chave mestra local **não** fica no `.env` — fica em `backend/secrets/`, arquivo com modo `0600`, fora do git; o `.env` guarda apenas o caminho. Nenhum endpoint da API devolve chave mestra, DEK decifrada, ou `keyMaterial` completo (`resumo_dek()` trunca em 12 bytes — `encryption.py:325-342`).
+
+## Decisões de desenho
+
+- **Uma coleção, dois clientes.** Versões anteriores tinham `clientes_claro` (cópia em claro, para medir storage) e `clientes_tenant_beta` (coorte com DEK própria, para crypto shredding). As duas saíram: uma cópia em claro com milhares de CPF legíveis contradiz a tese, e o contraste real é entre clientes. `scripts/limpar-cofre.py` ainda dropa as duas (`LEGADO`) para quem rodou o seed antigo. A comparação de storage agora é feita por `scripts/bench_qe.py`, que cria e apaga a cópia em claro só em banco `*_test`.
+- **Cache de DEK de 60 s.** O driver mantém a DEK decifrada em memória; depois de apagar uma DEK, o documento continua abrindo até o cache expirar. `reiniciar_cliente_cifrado()` (`encryption.py`) descarta o cliente cifrado e o cache. Saiu da tela, mas vale para quem apagar chave na mão.
+- **DEK ausente com cofre não vazio é aviso, não silêncio.** `dek_id()` loga warning nesse caso; antes tratava como crypto shredding esperado, o que mascarava erro operacional real.
+- **`readiness()` expõe o erro real do servidor** (`code`/`codeName` via `erro_do_servidor()`), não só o nome genérico da exceção.
+- **`settings` congelado.** Teste que precisa mudar configuração troca o objeto inteiro com `dataclasses.replace`, nunca um campo.
+- **Cache de 8 s no `/preflight`** (`main.py`, `_PREFLIGHT_CACHE_TTL_S`): evita repetir `buildInfo`, `list_collection_names` e checagem de disco a cada remontagem do componente React.
