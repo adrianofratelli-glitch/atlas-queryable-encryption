@@ -1,0 +1,34 @@
+# Segredos e ambiente local nunca entram na imagem
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+# Dependências e builds do host (a imagem instala/compila as próprias)
+**/node_modules/
+**/dist/
+.venv/
+venv/
+**/.venv*/
+**/__pycache__/
+**/.pytest_cache/
+# Metadados e artefatos locais
+.git/
+.claude/
+.remember/
+.logs/
+graphify-out/
+test-results/
+playwright-report/
+*.log
+# Material de chave, binário da plataforma do host e estado gerado pelo seed
+backend/secrets/
+*.bin
+backend/lib/
+backend/venv/
+backend/data/demo_seeds*.json
+backend/data/bench.*.json
+.github/
+.playwright-mcp/
+.ruff_cache/

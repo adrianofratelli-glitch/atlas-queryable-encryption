@@ -183,6 +183,19 @@ collection with `python backend/seed_data.py --drop`. On a cluster shared by
 multiple PoVs, give this demo its own `QE_DB` and matching `QE_KEY_VAULT_NS`
 instead of dropping an existing collection or reusing another demo's key vault.
 
+## Docker
+
+One container: nginx serves the frontend build and proxies `/api` to a single uvicorn worker with the prefix removed, as the Vite proxy does. The build downloads the Linux `crypt_shared` for the build architecture (x86_64 or aarch64) from the official MongoDB feed and checks its sha256; `CRYPT_SHARED_PATH` inside the container always points to it.
+
+```bash
+docker build -t atlas-qe .        # optional: --build-arg MONGO_CRYPT_VERSION=<x.y.z>
+docker run --env-file backend/.env -p 127.0.0.1:18300:8080 \
+  -v "$PWD/backend/secrets:/app/backend/secrets:ro" \
+  -v "$PWD/backend/data:/app/backend/data" atlas-qe          # http://127.0.0.1:18300
+```
+
+The local master key is never in the image: mount `backend/secrets/` (with `QE_LOCAL_MASTER_KEY_PATH=./secrets/master-key.bin`), or use `QE_KMS_PROVIDER=aws`. The `backend/data` mount carries the seed metadata for "Show the pair". `docker run --env-file` does not strip quotes: a line `KEY="value"` arrives with the quotes, so write `KEY=value` in the file you pass. For UI mutations, add the page origin (e.g. `http://127.0.0.1:18300`) to `ALLOWED_ORIGINS`; keep the port bound to `127.0.0.1`, because behind nginx every request reaches the backend from loopback. Health: `GET /api/health/live`; readiness: `/api/preflight`.
+
 ## How it works
 
 ```text

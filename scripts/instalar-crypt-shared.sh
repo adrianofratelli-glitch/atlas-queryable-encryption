@@ -58,7 +58,12 @@ curl --fail --location --progress-bar "$URL" -o "$TMP/crypt.tgz"
 
 # O feed publica o sha256; não confie em download de biblioteca de criptografia
 # sem conferir. Um tarball truncado descompacta e a falha só aparece no dlopen.
-BAIXADO="$(shasum -a 256 "$TMP/crypt.tgz" | cut -d' ' -f1)"
+# shasum (macOS) ou sha256sum (Linux/imagem Docker, sem perl).
+if command -v shasum >/dev/null; then
+  BAIXADO="$(shasum -a 256 "$TMP/crypt.tgz" | cut -d' ' -f1)"
+else
+  BAIXADO="$(sha256sum "$TMP/crypt.tgz" | cut -d' ' -f1)"
+fi
 [[ "$BAIXADO" == "$SHA256" ]] || { echo "❌ sha256 divergente. Esperado $SHA256, obtido $BAIXADO." >&2; exit 1; }
 echo "  sha256 conferido"
 
