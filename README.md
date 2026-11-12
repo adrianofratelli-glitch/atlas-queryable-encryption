@@ -194,6 +194,16 @@ docker run --env-file backend/.env -p 127.0.0.1:18300:8080 \
   -v "$PWD/backend/data:/app/backend/data" atlas-qe          # http://127.0.0.1:18300
 ```
 
+Prebuilt image (published to GHCR on every push to `main` that touches the image):
+
+```bash
+docker pull ghcr.io/adrianofratelli-glitch/atlas-queryable-encryption:latest
+docker run --env-file backend/.env -p 127.0.0.1:8080:8080 \
+  -v "$PWD/backend/secrets:/app/backend/secrets:ro" -v "$PWD/backend/data:/app/backend/data" ghcr.io/adrianofratelli-glitch/atlas-queryable-encryption:latest
+```
+
+Same `--env-file` rule as above (`KEY=value`, no quotes); tags: `latest` and `sha-<7-char commit>`.
+
 The local master key is never in the image: mount `backend/secrets/` (with `QE_LOCAL_MASTER_KEY_PATH=./secrets/master-key.bin`), or use `QE_KMS_PROVIDER=aws`. The `backend/data` mount carries the seed metadata for "Show the pair". `docker run --env-file` does not strip quotes: a line `KEY="value"` arrives with the quotes, so write `KEY=value` in the file you pass. For UI mutations, add the page origin (e.g. `http://127.0.0.1:18300`) to `ALLOWED_ORIGINS`; keep the port bound to `127.0.0.1`, because behind nginx every request reaches the backend from loopback. Health: `GET /api/health/live`; readiness: `/api/preflight`.
 
 ## How it works
