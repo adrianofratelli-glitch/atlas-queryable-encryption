@@ -59,7 +59,7 @@ from encryption import (  # noqa: E402
 )
 from routers.demo import BUSCAS_STRING  # noqa: E402
 from seed_data import gerar  # noqa: E402
-from settings import BACKEND_DIR, banco_de_teste, settings  # noqa: E402
+from settings import BACKEND_DIR, alvos_de_escrita, banco_de_teste, settings  # noqa: E402
 
 COLECAO_CLARA = "bench_claro"
 
@@ -176,8 +176,13 @@ def main() -> int:
                         help="tenta compactStructuredEncryptionData antes de medir o storage (ver ADR 0004)")
     args = parser.parse_args()
 
-    if not banco_de_teste(settings.mongo_db):
-        print("❌ bench_qe.py só roda em banco *_test.", file=sys.stderr)
+    # Banco da coleção E banco do cofre: o bench cria DEK em cache, insere e
+    # (com --compactar) mexe em metadados; cofre da demo com QE_DB de teste
+    # também é recusado, como nos testes live.
+    fora_de_teste = [nome for nome in alvos_de_escrita(settings) if not banco_de_teste(nome)]
+    if fora_de_teste:
+        print(f"❌ bench_qe.py só roda com QE_DB e QE_KEY_VAULT_NS em *_test (fora: {', '.join(fora_de_teste)}).",
+              file=sys.stderr)
         return 1
 
     db_claro = cliente_claro()[settings.mongo_db]

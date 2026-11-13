@@ -107,6 +107,14 @@ def test_busca_string_exibe_resultado_decifrado_e_view_do_dba(monkeypatch):
 
     monkeypatch.setattr(demo, "cliente_cifrado", lambda: DatabaseClient(encrypted_doc))
     monkeypatch.setattr(demo, "cliente_claro", lambda: DatabaseClient(raw_doc))
+    capturas = []
+
+    def capturar(nome, colecao, fn):
+        # Simula o CommandListener: devolve o comando como sairia pela rede.
+        capturas.append((nome, colecao))
+        return fn(), {nome: colecao, "pipeline": [{"$match": {"x": Binary(b"c" * 30, 6)}}]}
+
+    monkeypatch.setattr(demo, "executar_capturando", capturar)
     result = demo.buscar_string("prefixo")
 
     assert result["aplicacao"]["encontrados"] == result["dba"]["encontrados"] == 1
@@ -116,6 +124,11 @@ def test_busca_string_exibe_resultado_decifrado_e_view_do_dba(monkeypatch):
     # O total sai pelo cliente CIFRADO, com o mesmo filtro da busca.
     assert result["aplicacao"]["total"] == 111
     assert contagens == [filters[0]]
+    # O countDocuments que gerou o total é capturado e exibido, com o trecho cifrado.
+    assert sorted(capturas) == [("aggregate", "clientes"), ("find", "clientes")]
+    contagem = result["contagem_enviada_ao_servidor"]
+    assert contagem["aggregate"] == "clientes"
+    assert contagem["pipeline"][0]["$match"]["x"] == "<Binary subtype 6 · 30 B · ciphertext>"
     assert filters[1] == {"_id": {"$in": [oid]}}
 
 

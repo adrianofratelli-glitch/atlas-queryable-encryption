@@ -208,6 +208,7 @@ def test_busca_string_informa_valor_e_campo(monkeypatch, colecoes, cliente):
     assert r["modo"] == "prefixo" and r["aplicacao"]["documentos"][0]["email_prefix"].startswith("titular12")
     # A coleção falsa não tem count_documents: o total falha e a busca segue (fail-open).
     assert r["aplicacao"]["total"] is None and r["aplicacao"]["encontrados"] == 1
+    assert r["contagem_enviada_ao_servidor"] is None
 
 
 def test_leitura_por_id_segue_a_ordem_da_aplicacao():

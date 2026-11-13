@@ -124,6 +124,10 @@ def test_busca_string_casa_varios_valores_distintos(api, tipo):
     assert corpo["aplicacao"]["total"] == TOTAIS_STRING[tipo]
     valores = {doc[corpo["campo"]] for doc in corpo["aplicacao"]["documentos"]}
     assert len(valores) == corpo["aplicacao"]["encontrados"] == corpo["limite"]
+    # A contagem que gerou o total também sai cifrada.
+    contagem = json.dumps(corpo["contagem_enviada_ao_servidor"])
+    assert corpo["contagem_enviada_ao_servidor"]["aggregate"] == "clientes"
+    assert corpo["valor"] not in contagem and "Binary subtype 6" in contagem
     # Lado a lado, linha a linha: o DBA lê os mesmos _id na mesma ordem.
     assert [d["_id"] for d in corpo["dba"]["documentos"]] == [d["_id"] for d in corpo["aplicacao"]["documentos"]]
     trecho = corpo["valor"].lower()

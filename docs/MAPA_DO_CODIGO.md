@@ -44,15 +44,15 @@ Todas as chamadas passam por `useApi.js` (`fetch('/api' + rota)`; o Vite remove 
 
 | Tela / ação | Componente | Chamada HTTP | Handler | Função de negócio | Onde toca o MongoDB |
 |---|---|---|---|---|---|
-| Abrir a página: selo "pré-voo" | `App.jsx:45` `SeloPreflight` | `GET /preflight` | `backend/main.py:124` `preflight` (-> `_preflight_sem_cache` :146, cache de 8 s) | `routers/demo.py::preflight_checks` (:400) e `encryption.py::readiness` (:430) | `ping`/`buildInfo` (`encryption.py:434,447`), `list_collection_names` (`main.py:184`), `estimated_document_count` + `find` no keyVault (`demo.py:408-409`) |
-| Abrir a página: chips de titulares | `App.jsx:143` `carregarTitulares` | `GET /demo/exemplos` | `demo.py:305` `exemplos` | mesma função | `demo.py:322` `find` pelo cliente cifrado, collection `clientes` |
+| Abrir a página: selo "pré-voo" | `App.jsx:45` `SeloPreflight` | `GET /preflight` | `backend/main.py:124` `preflight` (-> `_preflight_sem_cache` :146, cache de 8 s) | `routers/demo.py::preflight_checks` (:407) e `encryption.py::readiness` (:430) | `ping`/`buildInfo` (`encryption.py:434,447`), `list_collection_names` (`main.py:184`), `estimated_document_count` + `find` no keyVault (`demo.py:415-416`) |
+| Abrir a página: chips de titulares | `App.jsx:143` `carregarTitulares` | `GET /demo/exemplos` | `demo.py:312` `exemplos` | mesma função | `demo.py:329` `find` pelo cliente cifrado, collection `clientes` |
 | "Buscar por igualdade" (CPF do chip) | `App.jsx:195` -> `buscar` (:137) | `GET /demo/buscar?cpf=` | `demo.py:170` `buscar` | `demo.py::_executar` (:86) | `find` nos dois clientes (`demo.py:102`, `:106`) + leitura por `_id` do DBA (`:128`), `clientes` |
 | "Faixa: 5–15 / 15–25 / 25–40 mil" | `App.jsx:212` -> `buscarFaixa` (:138) | `GET /demo/buscar?salario_min=&salario_max=` | `demo.py:170` `buscar` (monta `$gte/$lte` em `salario`) | `_executar` | igual à igualdade, `clientes` |
 | "Buscar por UF (campo em claro)" | `App.jsx:217` -> `buscarFaixa` | `GET /demo/buscar?uf=SP` | `demo.py:170` `buscar` | `_executar` (controle: dois lados devolvem o mesmo) | `find` nos dois clientes, `clientes` |
-| "Começa com / Termina com / Contém" | `App.jsx:240` -> `buscarTexto` (:139) | `GET /demo/buscar-string?tipo=prefixo\|sufixo\|trecho` | `demo.py:251` `buscar_string` | mesma função; operador vem de `BUSCAS_STRING` (:234) | `server_info` (:254, exige 9.0), `find` com `$expr` + `$encStrStartsWith/EndsWith/Contains` no cifrado (:272), leitura por `_id` no claro (:278) |
+| "Começa com / Termina com / Contém" | `App.jsx:240` -> `buscarTexto` (:139) | `GET /demo/buscar-string?tipo=prefixo\|sufixo\|trecho` | `demo.py:251` `buscar_string` | mesma função; operador vem de `BUSCAS_STRING` (:234) | `server_info` (:254, exige 9.0), `find` com `$expr` + `$encStrStartsWith/EndsWith/Contains` no cifrado (:277), leitura por `_id` no claro (:283) |
 | Painel `QueryDetails` ("Ver query / comando que chegou ao servidor") | `components/QueryDetails.jsx` | sem chamada: usa `query_details` / `enviado_ao_servidor` da resposta | montado em `_executar` (:75) e `buscar_string` | `encryption.py::executar_capturando` (:260) e `resumir_comando_enviado` (:276) | listener de comandos (`CapturaDeComando`, `encryption.py:239`), não é query nova |
-| "Provas adicionais" > "Mostrar o par" | `App.jsx:297` | `GET /demo/par-repetido` | `demo.py:352` `par_repetido` | mesma função (+ `_ids_do_par` :63) | `find` por `_id` nos dois clientes (`demo.py:369-370`), `clientes` |
-| "Provas adicionais" > tabela de alternativas | `App.jsx:272-284` (`ALTERNATIVAS`) | nenhuma (conteúdo estático) | n/a | n/a | n/a |
+| "Provas adicionais" > "Mostrar o par" | `App.jsx:303` | `GET /demo/par-repetido` | `demo.py:359` `par_repetido` | mesma função (+ `_ids_do_par` :63) | `find` por `_id` nos dois clientes (`demo.py:376-377`), `clientes` |
+| "Provas adicionais" > tabela de alternativas | `App.jsx:278-290` (`ALTERNATIVAS`) | nenhuma (conteúdo estático) | n/a | n/a | n/a |
 | "Recarregar titulares" / "Revalidar conexão" | `App.jsx:191` / `:49` | repetem `/demo/exemplos` / `/preflight` | idem | idem | idem |
 
 Não existe botão de reset na UI. Reset é por linha de comando (`scripts/reset_demo.py`).
@@ -66,11 +66,11 @@ Briefing: [briefing/queries.md](briefing/queries.md).
 | Busca cifrada (igualdade, faixa, UF) | `routers/demo.py::_executar` (:102) | `find` com filtro `cpf` / `salario $gte-$lte` / `uf`, cliente com AutoEncryption | `clientes` |
 | Mesmo filtro como o DBA | `demo.py::_executar` (:106) | `find` idêntico, cliente comum (volta 0 nos campos cifrados) | `clientes` |
 | Leitura crua pelo DBA | `demo.py::_executar` (:128) | `find {_id: {$in: ids}}` | `clientes` |
-| Busca parcial no e-mail | `demo.py::buscar_string` (:272) | `find` com `$expr` e `$encStrStartsWith` / `$encStrEndsWith` / `$encStrContains` | `clientes` |
-| DBA lê os mesmos registros | `demo.py::buscar_string` (:278) | `find {_id: {$in}}` | `clientes` |
-| Titulares de exemplo | `demo.py::exemplos` (:322) | `find` com `_id $nin` do par plantado | `clientes` |
-| Par de CPF repetido | `demo.py::par_repetido` (:369, :370) | `find {_id: {$in}}` nos dois clientes | `clientes` |
-| Checagem do cofre | `demo.py::preflight_checks` (:408-409) | `estimated_document_count` + `find` por `keyAltNames` | `__keyVault` (`QE_KEY_VAULT_NS`) |
+| Busca parcial no e-mail | `demo.py::buscar_string` (:277) | `find` com `$expr` e `$encStrStartsWith` / `$encStrEndsWith` / `$encStrContains` | `clientes` |
+| DBA lê os mesmos registros | `demo.py::buscar_string` (:283) | `find {_id: {$in}}` | `clientes` |
+| Titulares de exemplo | `demo.py::exemplos` (:329) | `find` com `_id $nin` do par plantado | `clientes` |
+| Par de CPF repetido | `demo.py::par_repetido` (:376, :377) | `find {_id: {$in}}` nos dois clientes | `clientes` |
+| Checagem do cofre | `demo.py::preflight_checks` (:415-416) | `estimated_document_count` + `find` por `keyAltNames` | `__keyVault` (`QE_KEY_VAULT_NS`) |
 | Estado do cluster | `main.py::_preflight_sem_cache` (:181), `main.py::stats` (:200); `encryption.py::readiness` (:434), `versao_servidor` (:447) | `list_collection_names`, `estimated_document_count`, `ping`, `buildInfo` | `clientes`, admin |
 | Achar DEK por nome | `encryption.py::dek_id` (:138) | `find_one({keyAltNames})` | `__keyVault` |
 | Mapa de campos cifrados | `encryption.py::_campos` (:78) | `queryType` equality (`cpf`, `email`), prefix/suffix/substring (`email_*`), range (`salario`, `score_credito`), `observacoes` só cifrado | `clientes` |

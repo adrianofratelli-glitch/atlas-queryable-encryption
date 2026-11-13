@@ -262,8 +262,13 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
     }}}
     def contar():
         # Mesmo filtro cifrado, via `$match` do countDocuments: o total mostra
-        # que o trecho casou valores diferentes, não um documento só.
-        return _colecao(cliente_cifrado()).count_documents(filtro, maxTimeMS=15_000)
+        # que o trecho casou valores diferentes, não um documento só. O
+        # `aggregate` que sai pela rede é capturado como o `find`: a tela mostra
+        # a query que gerou o número, com o trecho como Binary(subtype 6).
+        return executar_capturando(
+            "aggregate", COLECAO_CIFRADA,
+            lambda: _colecao(cliente_cifrado()).count_documents(filtro, maxTimeMS=15_000),
+        )
 
     futuro_total = _executor.submit(contar)
     try:
@@ -281,16 +286,18 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
         futuro_total.cancel()
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
     try:
-        total = futuro_total.result()
+        total, enviado_total = futuro_total.result()
     except Exception:
         # O total é contexto, não a prova: sem ele a tela segue com os documentos.
-        total = None
+        total, enviado_total = None, None
     return {
         "tipo": item["label"], "campo": item["campo"],
         "operador": item["operador"], "modo": tipo, "valor": item["valor"],
         "limite": LIMITE_MAX,
         "filtro": serializar(filtro),
         "enviado_ao_servidor": resumir_comando_enviado(enviado),
+        # O countDocuments do total, como saiu (aggregate com $match + $group).
+        "contagem_enviada_ao_servidor": resumir_comando_enviado(enviado_total),
         "aplicacao": {"encontrados": len(encontrados), "total": total,
                       "documentos": [serializar(d) for d in encontrados]},
         "dba": {"encontrados": len(claros), "documentos": [serializar(d) for d in claros]},

@@ -260,6 +260,12 @@ export default function App() {
                 ? 'como o servidor recebeu, capturado depois da auto-encryption'
                 : undefined}
               label="Ver query / comando que chegou ao servidor" />
+            {buscaString.contagem_enviada_ao_servidor && (
+              <QueryDetails operation="aggregate" namespace="clientes"
+                query={buscaString.contagem_enviada_ao_servidor}
+                note="countDocuments que gerou o total, capturado depois da auto-encryption"
+                label="Ver a contagem que gerou o total" />
+            )}
           </>}
         </div>
 

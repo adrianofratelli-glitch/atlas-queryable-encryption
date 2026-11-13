@@ -7,6 +7,7 @@ são testadas sem cluster. Um p95 que pega a posição errada ou um termo fora d
 
 import importlib.util
 import random
+from dataclasses import replace
 import sys
 from pathlib import Path
 
@@ -97,3 +98,20 @@ def test_storage_soma_familia_cifrada_inclusive_ecoc_em_compactacao():
     assert r["logico"] == 151 + 16
     assert r["disco"] == 50 + 5 + 0 + 20 + 16
     assert bench.razao(10, 0) is None
+
+
+@pytest.mark.parametrize("db, cofre", [
+    ("qe_test", "qe_demo.__keyVault"),   # coleção de teste, cofre da demo
+    ("qe_demo", "qe_test.__keyVault"),   # coleção da demo, cofre de teste
+])
+def test_bench_recusa_se_colecao_ou_cofre_nao_forem_de_teste(monkeypatch, capsys, db, cofre):
+    monkeypatch.setattr(bench, "settings", replace(bench.settings, mongo_db=db, key_vault_ns=cofre))
+    monkeypatch.setattr(sys, "argv", ["bench_qe.py"])
+
+    def proibido():
+        raise AssertionError("o bench não pode abrir conexão antes da trava")
+
+    monkeypatch.setattr(bench, "cliente_claro", proibido)
+    monkeypatch.setattr(bench, "cliente_cifrado", proibido)
+    assert bench.main() == 1
+    assert "qe_demo" in capsys.readouterr().err
