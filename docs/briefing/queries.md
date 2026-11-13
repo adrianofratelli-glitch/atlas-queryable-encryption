@@ -8,7 +8,7 @@
 
 ### 1.1 Busca comparativa — `GET /demo/buscar`
 
-**Onde:** `backend/routers/demo.py:70-125` (função `_executar`), chamada por `buscar()` em `demo.py:128-175`.
+**Onde:** `backend/routers/demo.py:86-167` (função `_executar`), chamada por `buscar()` em `demo.py:170-227`.
 
 **O que faz em linguagem natural:** (quando o filtro cifrado volta com 0 no cliente claro, lê os mesmos `_id` achados pela aplicação também pelo cliente claro e devolve em `dba.documentos` com `dba.origem = "por_id"`; `dba.encontrados` continua sendo a contagem do filtro) monta um único filtro (igualdade por CPF, faixa por salário, ou UF como controle) e roda **o mesmo filtro em paralelo** nos dois `MongoClient` (cifrado e claro), via `ThreadPoolExecutor` de 2 workers efetivos. É a query que sustenta a tela inteira — o painel duplo é literalmente o resultado desta função.
 
@@ -38,7 +38,7 @@ Os três tipos podem se combinar (CPF + faixa de salário simultâneos). A proje
 
 ### 1.2 Titulares de exemplo — `GET /demo/exemplos`
 
-**Onde:** `backend/routers/demo.py:178-224`.
+**Onde:** `backend/routers/demo.py:305-349`.
 
 **O que faz:** busca N titulares (padrão 4, entre 1 e 8) pelo **cliente cifrado** — a aplicação lendo o próprio dado, como faria em produção — para a tela oferecer escolhas em vez de exigir que alguém decore um CPF sintético.
 
@@ -55,7 +55,7 @@ colecao.find(filtro, {"_id": 1, "nome": 1, "cpf": 1, "salario": 1, "uf": 1}) \
 
 ### 1.3 Par de CPF repetido — `GET /demo/par-repetido`
 
-**Onde:** `backend/routers/demo.py:227-272`.
+**Onde:** `backend/routers/demo.py:352-397`.
 
 **O que faz:** busca por `_id` (usando os IDs plantados no seed, persistidos em `backend/data/demo_seeds.<QE_DB>.json` — um arquivo por banco, para o seed do banco `_test` não sobrescrever o par da demo; o nome antigo `demo_seeds.json` ainda é lido para o banco da demo) nos dois clientes, e compara os ciphertexts hex dos dois documentos.
 
@@ -142,7 +142,7 @@ Cada campo tem seu próprio `keyId`, resolvido via `dek_id(nome_dek(colecao, cam
 
 `encryptedFields` não pode mudar depois do `create_collection` — trocar `queryType`, `contention`, `min`/`max`/`precision`, ou adicionar um campo cifrado, exige **dropar e recriar a coleção inteira**, dataset junto. É o único erro desta PoV que custa tudo. Há teste dedicado em `backend/tests/test_encryption.py`.
 
-Os três campos `email_*` guardam o mesmo e-mail sintético cifrado. Cada campo QE aceita um tipo de query configurado, por isso há um campo para prefixo, outro para sufixo e outro para substring. A UI oferece opções predefinidas, sem texto livre. `/demo/buscar-string` valida a opção por allowlist, exige MongoDB 9.0+, executa a expressão pelo cliente cifrado (a resposta inclui `campo`, `valor`, `modo` e `limite` para a tela marcar onde o trecho casou) e busca os mesmos `_id` pelo cliente claro para exibir os ciphertexts. Para atualizar uma instalação antiga: crie as DEKs com `python scripts/criar-cofre.py` e recrie a coleção descartável com `python backend/seed_data.py --drop`.
+Os três campos `email_*` guardam o mesmo e-mail sintético cifrado. Cada campo QE aceita um tipo de query configurado, por isso há um campo para prefixo, outro para sufixo e outro para substring. A UI oferece opções predefinidas, sem texto livre. `/demo/buscar-string` valida a opção por allowlist, exige MongoDB 9.0+ (prefixo, sufixo e substring são GA no 9.0; no 8.2 eram Public Preview com nomes `*Preview` incompatíveis), executa a expressão pelo cliente cifrado (a resposta inclui `campo`, `valor`, `modo` e `limite` para a tela marcar onde o trecho casou), conta em paralelo o total com `count_documents` e o mesmo filtro cifrado (`aplicacao.total`; `null` se a contagem falhar, sem derrubar a busca) e busca os mesmos `_id` pelo cliente claro, na ordem da aplicação (`na_ordem_de`), para exibir os ciphertexts. Os exemplos casam vários e-mails distintos na massa de 5.000: prefixo `titular12` (111), sufixo `7@exemplo.invalid` (500) e trecho `42@exe` (50). Para atualizar uma instalação antiga: crie as DEKs com `python scripts/criar-cofre.py` e recrie a coleção descartável com `python backend/seed_data.py --drop`.
 
 ### `contention` — o que é e por que importa
 

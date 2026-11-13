@@ -54,7 +54,7 @@ Four options address the core objections:
 |---|---|
 | **Equality query** | A filter over an encrypted field works without deterministic ciphertext |
 | **Range query** | `$gte`/`$lte` work over an encrypted field; range queries are GA in MongoDB 8.0 |
-| **String query** | Choose a predefined prefix, suffix, or substring search over an encrypted email; MongoDB 9.0 + PyMongo 4.18+ + `pymongocrypt` 1.19+ |
+| **String query** | Choose a predefined prefix, suffix, or substring search over an encrypted email; each example matches many distinct values (111, 500, and 50 of 5,000) and the screen shows the total. Generally available in MongoDB 9.0 (Public Preview in 8.2 under `*Preview` names that are incompatible with GA); needs PyMongo 4.18+ and `pymongocrypt` 1.19+ |
 | **State query** | The experimental control: both clients find the same plaintext field |
 
 The **Show pair** action displays two different customers with the same
@@ -66,25 +66,47 @@ ciphertexts would let anyone holding a dump count repetitions and infer identity
 `scripts/bench_qe.py` compares the encrypted collection with an **indexed**
 plaintext copy of the same 5,000 synthetic customers, through the same cluster
 and network, and drops the copy afterwards. It refuses anything but a `_test`
-database. Two runs on 2026-10-06 against Atlas MongoDB 9.0.3, from a laptop with
-a ~207 ms `ping` p50 to the cluster (100 queries per type, 30 single inserts):
+database. Run on 2026-11-12 against Atlas MongoDB 9.0.7 from a laptop whose
+driver `ping` p50 to the cluster was 258 ms (100 queries per type, 30 single
+inserts; raw output in `backend/data/bench.<db>.json`, not versioned):
 
-| Operation | QE p50 / p95 (ms) | Plaintext p50 / p95 (ms) | Run 1 p50 ratio | Run 2 p50 ratio |
-|---|---|---|---|---|
-| Equality on `cpf` | 206.2 / 399.7 | 207.4 / 223.7 | 0.81× | 0.99× |
-| Range on `salario` | 403.8 / 471.6 | 210.6 / 271.2 | 1.71× | 1.92× |
-| Single insert | 461.4 / 1011.8 | 212.8 / 228.0 | 2.09× | 2.17× |
+| Operation | QE p50 / p95 (ms) | Plaintext p50 / p95 (ms) | p50 ratio |
+|---|---|---|---|
+| Equality on `cpf` | 405.1 / 421.0 | 259.4 / 272.0 | 1.56× |
+| Range on `salario` | 380.9 / 431.2 | 262.1 / 274.5 | 1.45× |
+| Single insert | 453.4 / 1179.9 | 265.1 / 274.8 | 1.71× |
+| Prefix on `email_prefix` | 412.4 / 426.3 | — | 1.60× ping |
+| Suffix on `email_suffix` | 410.2 / 431.2 | — | 1.59× ping |
+| Substring on `email_substring` | 409.9 / 426.5 | — | 1.59× ping |
 
-Absolute values are from run 2. On this link an equality query costs one round
-trip either way; range and insert cost about two. Storage is the real price:
-`clientes` plus `enxcol_.*` used 441 MB (data + indexes) against 2.6 MB for the
-plaintext copy, about 170×, driven by the eight encrypted fields and above all
-by the substring field (`strMaxLength` 40). Size each queryable field
-deliberately; `observacoes` is encrypted but not queryable and pays no metadata.
+String queries have no fair plaintext counterpart (it would be an unindexed
+regular expression), so they are read against the network round trip: on this
+link every encrypted query costs about one round trip plus ~150 ms. Earlier
+runs (2026-10-06, MongoDB 9.0.3, ~207 ms ping) measured equality at 0.8–1.0×
+and range at 1.7–1.9×; re-measure on your own network before quoting a number.
 
-The same run captures the `find` sent by the encrypted client and checks its
-BSON: the searched CPF bytes are absent, and the filter holds a
-`Binary(subtype 6)`.
+Storage is the real price. Right after a reset, `clientes` plus `enxcol_.*`
+used 428 MB logical (453 MB on disk, compressed) against 2.4 MB logical
+(0.8 MB on disk) for the plaintext copy: about 175× logical, 570× on disk
+(sizes in MiB).
+Of that, 127 MB is the indexes of `clientes` (mostly the `__safeContent__` tag
+array index), 113 MB is the
+compaction log `enxcol_.clientes.ecoc` (~1 M entries, ~207 per customer) and
+46 MB is `enxcol_.clientes.esc`. The substring field drives it (`strMaxLength`
+40; its ciphertext alone is 9–14 KB per value, against ~140 B for the CPF).
+Size each queryable field deliberately; `observacoes` is encrypted but not
+queryable and pays no metadata.
+
+`compactStructuredEncryptionData` is the documented way to shrink the
+compaction log, but on this dataset it does not finish: the server's internal
+transaction exceeds `transactionLifetimeLimitSeconds` (60 s by default), the log
+stays renamed as `ecoc.compact`, and each attempt adds entries to `esc`. The
+bench therefore only compacts with `--compactar`. See
+[ADR 0004](docs/adr/0004-bench-storage-e-compactacao.md).
+
+The same run captures the commands sent by the encrypted client and checks
+their BSON: neither the searched CPF bytes nor the searched substring are
+present, and the filter holds a `Binary(subtype 6)`.
 
 ## How it differs from familiar controls
 
@@ -239,6 +261,7 @@ because the application did.
 ```bash
 backend/venv/bin/python -m pytest      # no cluster, crypt_shared, or KMS required
 backend/venv/bin/ruff check backend scripts
+cd frontend && npm test                # presentation rules + screen/backend contract (node:test)
 ```
 
 `backend/tests/test_adversarial.py` covers hostile input (non-ASCII digits,
@@ -260,9 +283,16 @@ field, substrings above `strMaxQueryLength`, values above `strMaxLength`) fail
 in the driver with readable errors, that Unicode/emoji work in prefix and
 substring fields, that concurrent inserts on the same value succeed, and that
 an empty key vault or an unreachable cluster becomes a fast, readable 502.
+It also checks that each string example matches the expected number of
+distinct values, that matching ignores case as the schema declares, that the
+DBA panel lists the same `_id`s in the same order, and that rewrapping a DEK
+(local KMS, `_test` key vault only) changes the DEK's `keyMaterial` while every
+document's ciphertext stays byte-for-byte identical: rotating the master key
+re-encrypts the data keys, not the fields. Decisions are recorded in
+[docs/adr/](docs/adr/).
 
 Every pull request runs the backend test suite, Ruff, and a dependency audit,
-plus a clean frontend production build and npm audit. The suite uses MongoDB
+plus the frontend tests, a clean production build, and npm audit. The suite uses MongoDB
 stubs and requires no Atlas cluster, `crypt_shared` library, or KMS provider.
 
 ## Security boundaries

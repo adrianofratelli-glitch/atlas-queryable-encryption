@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Busca parcial: exemplos que casam vários e-mails distintos (prefixo `titular12` = 111, sufixo `7@exemplo.invalid` = 500, trecho `42@exe` = 50) no lugar de `titular0`/`ular0@`, que casavam um documento só; a resposta traz `aplicacao.total` (`count_documents` com o mesmo filtro cifrado, fail-open) e a tela mostra "N documentos casam no total".
+- Painel do DBA na mesma ordem da aplicação (`na_ordem_de`) na leitura por `_id`: o lado a lado volta a casar linha a linha.
+- Destaque do trecho ignora maiúsculas/minúsculas, como o `caseSensitive: false` do schema.
+- Rótulo GA no MongoDB 9.0 para prefixo/sufixo/substring (preflight, tela, README, briefing).
+- `scripts/bench_qe.py`: mede prefixo/sufixo/trecho, storage lógico × em disco por coleção (inclui `ecoc.compact`), `compactStructuredEncryptionData` por cliente cifrado dedicado sem timeout de socket (antes e depois), p95 por posto mais próximo, prova de rede também do trecho, ambiente registrado.
+- Testes: `frontend/tests/` (`npm test`, node:test, no CI), `backend/tests/test_bench.py`, live com totais exatos, caixa, ordem e rewrap de DEK no cofre `*_test` (KMS local).
+- ADRs 0001–0004 em `docs/adr/`.
 - Atualiza dependências compatíveis e pisos de segurança; alinha metadados de versão entre aplicação e frontend.
 
 ## 1.1.1 — 2026-10-09

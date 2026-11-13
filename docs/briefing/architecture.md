@@ -109,7 +109,7 @@ Sem `crypt_shared_lib_required=True`, o driver cairia silenciosamente para `mong
 
 ### `/preflight` — por que existe
 
-`main.py:106-170`. Checa `MONGO_URI`, alcance do cluster, versão do servidor (7.0+ obrigatório, `range` GA só 8.0+), presença da `crypt_shared`, estado do cofre, existência da coleção e modo da guarda de mutação. Cacheado por 8s (`_PREFLIGHT_CACHE_TTL_S`) porque o frontend chama a cada montagem de `<SeloPreflight/>`, e cada chamada roda `buildInfo` + `list_collection_names` + contagens no keyVault — comandos baratos isoladamente, mas sem motivo para repetir a cada re-render.
+`main.py:125-195`. Checa `MONGO_URI`, alcance do cluster, versão do servidor (7.0+ obrigatório, `range` GA só 8.0+), presença da `crypt_shared`, estado do cofre, existência da coleção e modo da guarda de mutação. Cacheado por 8s (`_PREFLIGHT_CACHE_TTL_S`) porque o frontend chama a cada montagem de `<SeloPreflight/>`, e cada chamada roda `buildInfo` + `list_collection_names` + contagens no keyVault — comandos baratos isoladamente, mas sem motivo para repetir a cada re-render.
 
 Motivo de existir: num cluster em versão errada, o erro nativo do driver é "comando desconhecido" e não menciona criptografia em lugar nenhum — sem o preflight, dez minutos de reunião debugando a coisa errada.
 

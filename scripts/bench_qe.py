@@ -19,7 +19,13 @@ com um collscan. Mede, pelo mesmo cluster e pela mesma rede:
 
     python scripts/bench_qe.py               # 100 consultas por tipo
     python scripts/bench_qe.py --consultas 300
-    python scripts/bench_qe.py --sem-compactar   # não roda o compact (mede só o estado atual)
+    python scripts/bench_qe.py --compactar   # tenta compactStructuredEncryptionData antes de medir storage
+
+O compact é opt-in: medido em 2026-11-12 (Atlas 9.0.7, 5.000 titulares, ~1 M
+entradas na `ecoc` por causa do campo de substring), ele NÃO conclui — a
+transação interna estoura `transactionLifetimeLimitSeconds` (padrão 60 s), a
+`ecoc` fica renomeada como `ecoc.compact` e cada tentativa ainda acrescenta
+entradas à `esc`. Ver docs/adr/0004-bench-storage-e-compactacao.md.
 """
 
 from __future__ import annotations
@@ -166,8 +172,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--consultas", type=int, default=100)
     parser.add_argument("--inserts", type=int, default=30)
-    parser.add_argument("--sem-compactar", action="store_true",
-                        help="não roda compactStructuredEncryptionData antes de medir o storage")
+    parser.add_argument("--compactar", action="store_true",
+                        help="tenta compactStructuredEncryptionData antes de medir o storage (ver ADR 0004)")
     args = parser.parse_args()
 
     if not banco_de_teste(settings.mongo_db):
@@ -256,7 +262,7 @@ def main() -> int:
     claro_bytes = _tamanhos(db_claro, COLECAO_CLARA)
     antes = storage(db_claro, COLECAO_CIFRADA)
     compactacao: dict = {"executada": False}
-    if not args.sem_compactar:
+    if args.compactar:
         # Cada insert cifrado deixa entradas na `ecoc`; o compact as consolida
         # na `esc`. O comando sai pelo cliente CIFRADO: o driver acrescenta os
         # compactionTokens derivados das DEKs — sem eles o servidor recusa.

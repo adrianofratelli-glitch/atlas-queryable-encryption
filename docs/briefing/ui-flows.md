@@ -47,6 +47,7 @@ Screenshot de referência: `docs/screenshots/01-equality.png`.
 
 | Arquivo | Função |
 |---|---|
+| `lib/apresentacao.js` | regras puras do que a tela afirma (legenda dos painéis, leitura por `_id`, destaque do trecho, máscara do comando, total da busca parcial, veredito do par); testadas com `cd frontend && npm test` (`frontend/tests/`) |
 | `App.jsx` | tela inteira: estado da busca, lista de titulares e opções fixas de faixa e busca parcial, selo de preflight, toast de erro global, painel duplo, seção "Provas adicionais" |
 | `components/Cifra.jsx` | renderiza um valor de campo respeitando a regra de procedência: se `__cifrado__` for `true`, mostra hex do **payload** (nunca do início do blob) + bytes reais + prefixo da DEK; senão, mostra o valor puro |
 | `components/Documento.jsx` | renderiza um documento inteiro com `ORDEM` de campos **fixa e idêntica** nos dois painéis — se cada lado renderizasse na ordem que o BSON devolveu, as linhas desalinhariam e o efeito "mesmo documento, duas leituras" desapareceria |
@@ -82,7 +83,7 @@ Filtro em campo **em claro**. Os dois painéis devolvem a mesma contagem — é 
 
 ### Fluxo 5 — busca parcial sobre e-mail cifrado
 
-A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial), cada um com estado e resultado próprios; um resultado nunca aparece no meio de outro bloco. Três botões apresentam exemplos fixos (prefixo `titular0`, sufixo `@exemplo.invalid`, trecho `ular0@`). Não há campo para digitar nem memorizar valor. A aplicação consulta um dos campos QE de string e mostra os documentos decifrados, com o campo buscado (`email_prefix`/`email_suffix`/`email_substring`) visível e o trecho casado marcado em verde (`mark.casou`); o painel DBA busca os mesmos documentos por `_id` e mostra os bytes cifrados. MongoDB 9.0+ e PyMongo 4.18+ são necessários.
+A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial), cada um com estado e resultado próprios; um resultado nunca aparece no meio de outro bloco. Três botões apresentam exemplos fixos que casam vários e-mails distintos (prefixo `titular12` = 111 titulares, sufixo `7@exemplo.invalid` = 500, trecho `42@exe` = 50); o aviso do painel da aplicação mostra o total ("111 documentos casam no total; exibindo os primeiros 10") — com um resultado só, uma busca parcial não se distinguiria de igualdade. Não há campo para digitar nem memorizar valor. A aplicação consulta um dos campos QE de string e mostra os documentos decifrados, com o campo buscado (`email_prefix`/`email_suffix`/`email_substring`) visível e o trecho casado marcado em verde (`mark.casou`); o painel DBA busca os mesmos documentos por `_id`, na mesma ordem, e mostra os bytes cifrados. O destaque ignora maiúsculas/minúsculas, como o `caseSensitive: false` do schema. Prefixo, sufixo e trecho cifrados são GA no MongoDB 9.0; exigem também PyMongo 4.18+.
 
 ### Fluxo 6 — "Provas adicionais" (seção recolhida)
 
@@ -113,7 +114,8 @@ A tela tem três cards independentes (1 igualdade, 2 faixa + UF, 3 texto parcial
 - **"E o que não funciona?"** — `sort`, `regex`, `$search`, `$group`, `$lookup`, índice comum e `$inc` sobre campo cifrado. O caso que importa é `sort`: não falha, ordena por ciphertext e devolve ordem sem sentido, silenciosamente.
 - **"Como faço relatório sobre dado cifrado?"** — campo cifrado é campo de filtro e leitura, não de análise. `faixa_salarial` é derivada em claro pela aplicação (antes de cifrar), grossa o bastante para não reidentificar.
 - **"E o direito ao esquecimento?"** — apagar a DEK torna o campo matematicamente irrecuperável, inclusive em backups já feitos. Mas a granularidade é por campo de coleção, nunca por documento — "uma DEK por titular" não existe nessa modelagem.
-- **"Quanto custa?"** — citar overhead por documento e por campo, com o tier ao lado, nunca o múltiplo isolado. Referência medida (M20, 100k titulares): ~9,5 kB/documento, ~1,9 kB/campo cifrado.
+- **"Quanto custa?"** — citar overhead por documento e por campo, com o tier ao lado, nunca o múltiplo isolado. Medida vigente (2026-11-12, `scripts/bench_qe.py`, 5.000 titulares, oito campos cifrados incluindo os três de e-mail): ~90 kB lógicos por documento (428 MiB contra 2,4 MiB da cópia em claro indexada), dos quais o campo de substring é a maior parte (ciphertext de 9–14 kB por valor e ~1 M entradas de metadados). A referência antiga de ~9,5 kB/documento é de antes dos campos de string. O compact de metadados não conclui nessa massa (ADR 0004): não prometa que ele "devolve" o espaço.
+- **"E a rotação de chave?"** — rotacionar a CMK recifra as DEKs (`rewrap_many_data_key`), não os campos: o ciphertext dos documentos fica idêntico byte a byte. Há teste live que prova isso no cofre `_test` com KMS local (ADR 0003).
 - **"A latência não fica ruim?"** — a cifragem roda na aplicação; depende do hardware de quem apresenta. Medir a linha de base da rede (RTT/VPN) antes de atribuir qualquer número ao produto.
 
 ## Contrato visual do portfólio
