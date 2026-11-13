@@ -200,9 +200,19 @@ def test_busca_string_informa_valor_e_campo(monkeypatch, colecoes, cliente):
             return {"versionArray": [9, 0, 3, 0]}
 
     cifrada, clara = colecoes
-    cifrada.documentos = [{"_id": "1", "nome": "N", "email_prefix": "titular0@exemplo.invalid"}]
+    cifrada.documentos = [{"_id": "1", "nome": "N", "email_prefix": "titular12@exemplo.invalid"}]
     monkeypatch.setattr(demo, "cliente_claro", lambda: type("C", (Cli,), {
         "find": lambda self, f, p=None: clara.find(f, p)})())
     r = cliente.get("/demo/buscar-string", params={"tipo": "prefixo"}).json()
-    assert r["valor"] == "titular0" and r["campo"] == "email_prefix"
-    assert r["modo"] == "prefixo" and r["aplicacao"]["documentos"][0]["email_prefix"].startswith("titular0")
+    assert r["valor"] == "titular12" and r["campo"] == "email_prefix"
+    assert r["modo"] == "prefixo" and r["aplicacao"]["documentos"][0]["email_prefix"].startswith("titular12")
+    # A coleção falsa não tem count_documents: o total falha e a busca segue (fail-open).
+    assert r["aplicacao"]["total"] is None and r["aplicacao"]["encontrados"] == 1
+
+
+def test_leitura_por_id_segue_a_ordem_da_aplicacao():
+    ids = ["c", "a", "b"]
+    lidos = [{"_id": "a"}, {"_id": "b"}, {"_id": "c"}]
+    assert [d["_id"] for d in demo.na_ordem_de(ids, lidos)] == ["c", "a", "b"]
+    # _id que a aplicação não viu vai para o fim, sem quebrar.
+    assert [d["_id"] for d in demo.na_ordem_de(["b"], [{"_id": "x"}, {"_id": "b"}])] == ["b", "x"]

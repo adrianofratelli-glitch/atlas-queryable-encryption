@@ -72,6 +72,17 @@ def _ids_do_par() -> list:
         return []
 
 
+def na_ordem_de(ids: list, documentos: list) -> list:
+    """Reordena a leitura por `_id` na ordem em que a aplicação recebeu.
+
+    `find({"_id": {"$in": ids}})` não promete ordem; sem isto o painel do DBA
+    listava os mesmos registros em outra sequência e a tela lado a lado deixava
+    de mostrar "o mesmo documento, duas leituras" linha a linha.
+    """
+    posicao = {i: n for n, i in enumerate(ids)}
+    return sorted(documentos, key=lambda doc: posicao.get(doc.get("_id"), len(posicao)))
+
+
 def _executar(filtro: dict, limite: int) -> dict:
     """O mesmo filtro nos dois clientes, no mesmo instante.
 
@@ -114,7 +125,7 @@ def _executar(filtro: dict, limite: int) -> dict:
         lidos, origem = claros, "filtro"
     else:
         try:
-            lidos = list(_colecao(cliente_claro()).find({"_id": {"$in": ids_app}}, projecao))
+            lidos = na_ordem_de(ids_app, list(_colecao(cliente_claro()).find({"_id": {"$in": ids_app}}, projecao)))
         except Exception as exc:
             raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
         origem = "por_id"
@@ -216,13 +227,17 @@ def buscar(
     }
 
 
+# Exemplos que casam VÁRIOS e-mails distintos. Com `titular0`/`ular0@` cada
+# busca achava um documento só, e uma busca parcial com um único resultado não
+# se distingue de igualdade para quem assiste. Totais na massa de 5.000:
+# prefixo 111 (titular12, 120–129, 1200–1299), sufixo 500 (…7@), trecho 50 (…42@).
 BUSCAS_STRING = {
     "prefixo": {"campo": "email_prefix", "operador": "$encStrStartsWith",
-                "argumento": "prefix", "valor": "titular0", "label": "E-mail começa com titular0"},
+                "argumento": "prefix", "valor": "titular12", "label": "E-mail começa com titular12"},
     "sufixo": {"campo": "email_suffix", "operador": "$encStrEndsWith",
-               "argumento": "suffix", "valor": "@exemplo.invalid", "label": "E-mail termina com @exemplo.invalid"},
+               "argumento": "suffix", "valor": "7@exemplo.invalid", "label": "E-mail termina com 7@exemplo.invalid"},
     "trecho": {"campo": "email_substring", "operador": "$encStrContains",
-              "argumento": "substring", "valor": "ular0@", "label": "E-mail contém ular0@"},
+              "argumento": "substring", "valor": "42@exe", "label": "E-mail contém 42@exe"},
 }
 
 
@@ -245,6 +260,12 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
     filtro = {"$expr": {item["operador"]: {
         "input": f"${item['campo']}", item["argumento"]: item["valor"]
     }}}
+    def contar():
+        # Mesmo filtro cifrado, via `$match` do countDocuments: o total mostra
+        # que o trecho casou valores diferentes, não um documento só.
+        return _colecao(cliente_cifrado()).count_documents(filtro, maxTimeMS=15_000)
+
+    futuro_total = _executor.submit(contar)
     try:
         encontrados, enviado = executar_capturando(
             "find", COLECAO_CIFRADA,
@@ -254,16 +275,24 @@ def buscar_string(tipo: str = Query(..., pattern=r"^(prefixo|sufixo|trecho)$")):
         ids = [doc["_id"] for doc in encontrados]
         # A visão sem chave lê os mesmos documentos por _id e exibe o binário
         # cifrado: evita fingir que o cliente comum consegue montar a busca QE.
-        claros = list(_colecao(cliente_claro()).find({"_id": {"$in": ids}}, {"_id": 1, "nome": 1, item["campo"]: 1})) if ids else []
+        claros = na_ordem_de(ids, list(_colecao(cliente_claro()).find(
+            {"_id": {"$in": ids}}, {"_id": 1, "nome": 1, item["campo"]: 1}))) if ids else []
     except Exception as exc:
+        futuro_total.cancel()
         raise HTTPException(status_code=502, detail=erro_do_servidor(exc)) from exc
+    try:
+        total = futuro_total.result()
+    except Exception:
+        # O total é contexto, não a prova: sem ele a tela segue com os documentos.
+        total = None
     return {
         "tipo": item["label"], "campo": item["campo"],
         "operador": item["operador"], "modo": tipo, "valor": item["valor"],
         "limite": LIMITE_MAX,
         "filtro": serializar(filtro),
         "enviado_ao_servidor": resumir_comando_enviado(enviado),
-        "aplicacao": {"encontrados": len(encontrados), "documentos": [serializar(d) for d in encontrados]},
+        "aplicacao": {"encontrados": len(encontrados), "total": total,
+                      "documentos": [serializar(d) for d in encontrados]},
         "dba": {"encontrados": len(claros), "documentos": [serializar(d) for d in claros]},
         "leitura": (
             f"O servidor casou \"{item['valor']}\" contra o campo {item['campo']} sem decifrá-lo; "

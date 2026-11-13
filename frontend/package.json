@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "check": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs"
   },
   "keywords": ["mongodb", "atlas", "queryable-encryption", "pov"],
   "author": "Adriano Fratelli",

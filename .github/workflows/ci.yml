@@ -35,7 +35,7 @@ jobs:
       - run: pip-audit -r backend/requirements.txt
 
   frontend:
-    name: Frontend build and dependency audit
+    name: Frontend tests, build, and dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -49,5 +49,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # Presentation rules and the screen/backend contract; node:test, no extra deps.
+      - run: npm test
       - run: npm run build
       - run: npm audit --audit-level=high

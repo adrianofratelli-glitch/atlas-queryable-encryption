@@ -77,9 +77,10 @@ def test_busca_string_exibe_resultado_decifrado_e_view_do_dba(monkeypatch):
     from routers import demo
 
     oid = ObjectId()
-    encrypted_doc = {"_id": oid, "nome": "Titular Um", "email_prefix": "titular0@exemplo.invalid"}
+    encrypted_doc = {"_id": oid, "nome": "Titular Um", "email_prefix": "titular12@exemplo.invalid"}
     raw_doc = {"_id": oid, "nome": "Titular Um", "email_prefix": Binary(b"x" * 40, 6)}
     filters = []
+    contagens = []
 
     class Cursor:
         def __init__(self, docs): self.docs = docs
@@ -91,6 +92,9 @@ def test_busca_string_exibe_resultado_decifrado_e_view_do_dba(monkeypatch):
         def find(self, filtro, _projection):
             filters.append(filtro)
             return Cursor([self.doc])
+        def count_documents(self, filtro, **_kw):
+            contagens.append(filtro)
+            return 111
 
     class DatabaseClient:
         def __init__(self, doc): self.doc = doc
@@ -106,9 +110,12 @@ def test_busca_string_exibe_resultado_decifrado_e_view_do_dba(monkeypatch):
     result = demo.buscar_string("prefixo")
 
     assert result["aplicacao"]["encontrados"] == result["dba"]["encontrados"] == 1
-    assert result["aplicacao"]["documentos"][0]["email_prefix"] == "titular0@exemplo.invalid"
+    assert result["aplicacao"]["documentos"][0]["email_prefix"] == "titular12@exemplo.invalid"
     assert result["dba"]["documentos"][0]["email_prefix"]["__cifrado__"] is True
-    assert filters[0]["$expr"]["$encStrStartsWith"]["prefix"] == "titular0"
+    assert filters[0]["$expr"]["$encStrStartsWith"]["prefix"] == "titular12"
+    # O total sai pelo cliente CIFRADO, com o mesmo filtro da busca.
+    assert result["aplicacao"]["total"] == 111
+    assert contagens == [filters[0]]
     assert filters[1] == {"_id": {"$in": [oid]}}
 
 

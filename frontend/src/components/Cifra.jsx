@@ -1,4 +1,5 @@
 import React from 'react'
+import { textoCifra } from '../lib/apresentacao'
 
 /**
  * Renderiza um valor vindo do backend respeitando a regra da PoV: nada na tela
@@ -15,12 +16,11 @@ export default function Cifra({ valor }) {
     // A amostra vem do PAYLOAD, nunca do começo do blob: os 17 primeiros bytes
     // são tipo + UUID da DEK e são idênticos em todo valor do mesmo campo.
     // Exibi-los faria dois valores distintos parecerem o mesmo ciphertext.
+    const { amostra, rodape } = textoCifra(valor)
     return (
       <span>
-        <span className="cifra">{valor.hex}{valor.fim ? `…${valor.fim}` : '…'}</span>
-        <span className="cifra__bytes">
-          {valor.bytes} B · subtype 6{valor.chave ? ` · DEK ${valor.chave.slice(0, 8)}` : ''}
-        </span>
+        <span className="cifra">{amostra}</span>
+        <span className="cifra__bytes">{rodape}</span>
       </span>
     )
   }

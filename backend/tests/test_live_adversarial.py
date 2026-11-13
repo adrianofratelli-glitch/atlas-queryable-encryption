@@ -113,6 +113,61 @@ def test_busca_string_chega_cifrada(api, tipo):
     assert all(doc[corpo["campo"]]["__cifrado__"] for doc in corpo["dba"]["documentos"])
 
 
+# Totais na massa determinística de 5.000 (`titular{0..4999}@exemplo.invalid`).
+TOTAIS_STRING = {"prefixo": 111, "sufixo": 500, "trecho": 50}
+
+
+@pytest.mark.parametrize("tipo", ["prefixo", "sufixo", "trecho"])
+def test_busca_string_casa_varios_valores_distintos(api, tipo):
+    """Busca parcial com um resultado só não se distingue de igualdade na tela."""
+    corpo = api.get("/demo/buscar-string", params={"tipo": tipo}).json()
+    assert corpo["aplicacao"]["total"] == TOTAIS_STRING[tipo]
+    valores = {doc[corpo["campo"]] for doc in corpo["aplicacao"]["documentos"]}
+    assert len(valores) == corpo["aplicacao"]["encontrados"] == corpo["limite"]
+    # Lado a lado, linha a linha: o DBA lê os mesmos _id na mesma ordem.
+    assert [d["_id"] for d in corpo["dba"]["documentos"]] == [d["_id"] for d in corpo["aplicacao"]["documentos"]]
+    trecho = corpo["valor"].lower()
+    for valor in valores:
+        alvo = valor.lower()
+        assert (alvo.startswith(trecho) if tipo == "prefixo"
+                else alvo.endswith(trecho) if tipo == "sufixo" else trecho in alvo), valor
+
+
+def test_busca_string_ignora_caixa(cifrada):
+    """`caseSensitive: false` no schema: o servidor casa o termo em maiúsculas."""
+    filtro = {"$expr": {"$encStrStartsWith": {"input": "$email_prefix", "prefix": "TITULAR12"}}}
+    assert cifrada.count_documents(filtro) == TOTAIS_STRING["prefixo"]
+
+
+def test_rewrap_recifra_as_deks_e_nao_os_campos(clara, cifrada, titulares):
+    """Rotação de CMK (aqui: rewrap com o KMS local, só no cofre `_test`).
+
+    Prova a frase que mais erra em reunião de segurança: o rewrap troca o
+    `keyMaterial` das DEKs e não toca nenhum documento — o ciphertext dos
+    campos é o mesmo byte a byte, e a aplicação continua lendo.
+    """
+    if settings_mod.settings.kms_provider != "local":
+        pytest.skip("rewrap de teste só com o KMS local; nunca rotacionar CMK de nuvem aqui")
+    cofre = encryption.key_vault_collection()
+    nome = encryption.nome_dek(encryption.COLECAO_CIFRADA, "cpf")
+    antes_dek = cofre.find_one({"keyAltNames": nome})
+    alvo = titulares[0]["cpf"]
+    doc_app = cifrada.find_one({"cpf": alvo}, {"_id": 1})
+    antes_doc = clara.find_one({"_id": doc_app["_id"]}, {"cpf": 1})
+
+    with encryption.client_encryption() as ce:
+        resultado = ce.rewrap_many_data_key({"keyAltNames": nome})
+    assert resultado.bulk_write_result.modified_count == 1
+
+    depois_dek = cofre.find_one({"keyAltNames": nome})
+    assert depois_dek["_id"] == antes_dek["_id"]
+    assert depois_dek["keyMaterial"] != antes_dek["keyMaterial"]
+    assert clara.find_one({"_id": doc_app["_id"]}, {"cpf": 1})["cpf"] == antes_doc["cpf"]
+    encryption.reiniciar_cliente_cifrado()  # descarta a DEK em cache: a leitura abaixo usa o material novo
+    nova = encryption.cliente_cifrado()[settings_mod.settings.mongo_db][encryption.COLECAO_CIFRADA]
+    assert nova.find_one({"cpf": alvo}, {"cpf": 1})["cpf"] == alvo
+
+
 def test_par_plantado_tem_ciphertexts_distintos(api):
     corpo = api.get("/demo/par-repetido").json()
     assert corpo["ciphertexts_distintos"] is True

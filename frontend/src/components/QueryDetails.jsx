@@ -1,20 +1,7 @@
 import React from 'react'
+import { redact } from '../lib/apresentacao'
 
-const SENSITIVE = /(?:authorization|password|secret|token|uri|cpf|cnpj|email|salario|score|keymaterial|key)/i
-// Rótulo que o backend dá ao ciphertext capturado na rede. Não é segredo — é a
-// prova: mascará-lo esconderia justamente o que a tela quer mostrar.
-const CIPHERTEXT = /^<Binary subtype 6 · \d+ B · ciphertext>$/
-
-/** Mascara valores em claro sob chaves sensíveis, em qualquer profundidade. */
-export function redact(value, key = '', sensitive = false) {
-  const s = sensitive || SENSITIVE.test(key)
-  if (typeof value === 'string' && CIPHERTEXT.test(value)) return value
-  if (Array.isArray(value)) return value.map((item) => redact(item, '', s))
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redact(v, k, s)]))
-  }
-  return s ? '<mascarado>' : value
-}
+export { redact }
 
 export default function QueryDetails({ query, operation, namespace, explain, note, label = 'Ver query / chamada executada' }) {
   if (!query && !operation) return null

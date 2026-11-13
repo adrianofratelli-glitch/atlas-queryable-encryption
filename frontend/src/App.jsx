@@ -2,15 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { useApi } from './hooks/useApi'
 import Documento from './components/Documento'
 import QueryDetails from './components/QueryDetails'
+import { brl, formatarCpf, avisoTotalString, legendaPainel, leituraPorId, vereditoPar } from './lib/apresentacao'
 
 /**
  * A PoV inteira em uma tela. Um argumento só: o servidor executa a busca sem
  * conseguir ler o dado. Tudo que não serve para provar isso ficou de fora.
  */
 
-const brl = (n) => typeof n === 'number' ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : ''
-
-const formatarCpf = (cpf) => String(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
 
 function ErroToast() {
   const [toast, setToast] = useState(null)
@@ -61,15 +59,13 @@ function SeloPreflight() {
 
 function Painel({ titulo, sub, dados, destaque, campos, marca, aviso }) {
   if (!dados) return null
-  const porId = !destaque && dados.origem === 'por_id'
+  const porId = leituraPorId(dados, destaque)
   return (
     <div className={destaque ? 'painel painel--app' : 'painel painel--dba'}>
       <div className="painel__titulo">{titulo}</div>
       <div className="painel__origem">{sub}</div>
       <p className="legenda" style={{ margin: '0 0 12px' }}>
-        {destaque || dados.ms === undefined
-          ? `${dados.encontrados} documento(s)${dados.ms !== undefined ? ` · ${dados.ms} ms` : ''}`
-          : `o mesmo filtro, sem a chave: ${dados.encontrados} documento(s) · ${dados.ms} ms`}
+        {legendaPainel(dados, destaque)}
       </p>
       {aviso && <p className="legenda" style={{ margin: '0 0 12px' }}>{aviso}</p>}
       {porId && (
@@ -231,13 +227,14 @@ export default function App() {
           <h3 style={{ marginTop: 0 }}>3 · Texto parcial no e-mail cifrado</h3>
           <p className="legenda">
             Escolha um exemplo pronto. O servidor casa o trecho contra o e-mail sem decifrá-lo;
-            o trecho que casou aparece marcado no resultado da aplicação.
+            o trecho que casou aparece marcado no resultado da aplicação. Prefixo, sufixo e
+            trecho cifrados são GA no MongoDB 9.0.
           </p>
           <div className="chips" role="group" aria-label="Tipo de busca parcial">
             {[
-              ['prefixo', 'Começa com', 'titular0'],
-              ['sufixo', 'Termina com', '@exemplo.invalid'],
-              ['trecho', 'Contém', 'ular0@'],
+              ['prefixo', 'Começa com', 'titular12'],
+              ['sufixo', 'Termina com', '7@exemplo.invalid'],
+              ['trecho', 'Contém', '42@exe'],
             ].map(([tipo, label, exemplo]) => (
               <button key={tipo} className={buscaString?.modo === tipo ? 'chip chip--ativo' : 'chip'}
                 disabled={apiTexto.loading} onClick={() => buscarTexto(tipo)}>
@@ -252,7 +249,7 @@ export default function App() {
               <Painel titulo="SUA APLICAÇÃO" sub="Trecho cifrado pelo driver; resultado decifrado no cliente"
                 dados={buscaString.aplicacao} destaque campos={['_id', 'nome', buscaString.campo]}
                 marca={{ campo: buscaString.campo, trecho: buscaString.valor, modo: buscaString.modo }}
-                aviso={buscaString.aplicacao.encontrados >= buscaString.limite ? `Exibindo os primeiros ${buscaString.limite}.` : undefined} />
+                aviso={avisoTotalString(buscaString)} />
               <Painel titulo="O DBA · O BACKUP · A NUVEM" sub="Os mesmos registros por _id, sem acesso à DEK"
                 dados={buscaString.dba} campos={['_id', 'nome', buscaString.campo]}
                 aviso="Não há como montar esta busca sem a chave: o servidor só casa o trecho com o ciphertext que o driver gera." />
@@ -315,9 +312,9 @@ export default function App() {
                   {par.dba.map(d => <Documento key={d._id} doc={d} campos={['_id', 'nome', 'cpf']} />)}
                 </div>
               </div>
-              <div className={par.ciphertexts_distintos ? 'aviso' : 'aviso aviso--perigo'}>
-                <span>{par.ciphertexts_distintos ? '✓' : '⚠️'}</span>
-                <span>{par.leitura}</span>
+              <div className={vereditoPar(par).ok ? 'aviso' : 'aviso aviso--perigo'}>
+                <span>{vereditoPar(par).icone}</span>
+                <span>{vereditoPar(par).texto}</span>
               </div>
             </>
           )}

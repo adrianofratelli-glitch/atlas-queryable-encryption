@@ -1,5 +1,6 @@
 import React from 'react'
 import Cifra from './Cifra'
+import { posicaoDoTrecho } from '../lib/apresentacao'
 
 /**
  * A ORDEM DOS CAMPOS É FIXA e igual nos dois painéis. Se cada lado renderizar na
@@ -11,9 +12,7 @@ export const ORDEM = ['_id', 'nome', 'cpf', 'email', 'salario', 'score_credito',
 /** Marca onde o trecho buscado casou dentro do valor decifrado. */
 function Destacado({ texto, trecho, modo }) {
   const t = String(texto)
-  const i = modo === 'prefixo' ? (t.startsWith(trecho) ? 0 : -1)
-    : modo === 'sufixo' ? (t.endsWith(trecho) ? t.length - trecho.length : -1)
-    : t.indexOf(trecho)
+  const i = posicaoDoTrecho(t, trecho, modo)
   if (i < 0) return <span className="linha__valor">{t}</span>
   return (
     <span className="linha__valor">

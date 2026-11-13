@@ -175,7 +175,10 @@ def _preflight_sem_cache():
         }
         checks["qe_string_queries_ga"] = {
             "ok": maior >= 9,
-            "message": f"MongoDB {versao}" + ("" if maior >= 9 else " — prefixo, sufixo e substring exigem MongoDB 9.0+"),
+            # GA no 9.0 (operadores `$encStr*`, algoritmo `string`); no 8.2 eram
+            # Public Preview com nomes `*Preview` incompatíveis com o GA.
+            "message": f"MongoDB {versao}" + (" — prefixo, sufixo e substring GA" if maior >= 9
+                                              else " — prefixo, sufixo e substring exigem MongoDB 9.0+ (GA)"),
         }
         checks.update(demo.preflight_checks())
         nomes = set(cliente_claro()[settings.mongo_db].list_collection_names())
